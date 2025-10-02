@@ -697,6 +697,8 @@ document.getElementById("submitButton").addEventListener("click", async () => {
   }
   const ecmoType = document.getElementById("ecmo_type")?.value || "";
 
+  const selectedCodes = Array.from(document.querySelectorAll('input[name="icd10_codes"]:checked')).map(cb => cb.value);
+
   const record = {
     region: region,
     hospital: selectedHospitalText,
@@ -709,6 +711,7 @@ document.getElementById("submitButton").addEventListener("click", async () => {
     years_old: yearsOld,
     neonate_flag: neonateFlag,
     ecmo_type: ecmoType,
+    icd10_codes: selectedCodes,
     ecmo_24h_survival: document.getElementById("ecmo_24h_survival")?.value || "",
     ecmo_off_reasons: Array.from(document.querySelectorAll('input[name="ecmo_off_reason"]:checked')).map(cb => cb.value).join(", ") || "",
     ...(ecmoType === "ecpr" && {
@@ -759,6 +762,9 @@ document.getElementById("submitButton").addEventListener("click", async () => {
   try {
     await addDoc(collection(db, "ecmo_registry"), record);
     alert("✅ 登録が完了しました！");
+    document.querySelectorAll('input[name="icd10_codes"]').forEach(cb => {
+      cb.checked = false;
+    });
   } catch (e) {
     alert("❌ 登録に失敗しました: " + e.message);
     console.error(e);
