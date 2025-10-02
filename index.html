@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>ECMO レジストリ入力フォーム</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
+  <style>
+    label, input, select, button, span { font-size: 1em; }
+    fieldset { margin-bottom: 20px; }
+    th, td { white-space: pre-line; word-break: break-all; }
+    button { margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <h1>ECMO レジストリ入力フォーム</h1>
+
+  <fieldset>
+    <legend>患者情報</legend>
+<label>病院名：</label>
+    <select id="hospital">
+      <optgroup label="北海道">
+        <option value="hokkaido_univ">北海道大学病院（北海道）</option>
+        <option value="teine">手稲渓仁会病院（北海道）</option>
+        <option value="asahikawa_med">旭川医科大学病院（北海道）</option>
+        <option value="hokkaido_child">北海道立こども総合医療・療育センター（北海道）</option>
+      </optgroup>
+      <optgroup label="東北地方">
+        <option value="hirosaki">弘前大学医学部附属病院（青森県）</option>
+        <option value="iwate">岩手医科大学附属病院（岩手県）</option>
+        <option value="miyagi_child">宮城県立こども病院（宮城県）</option>
+        <option value="tohoku">東北大学病院（宮城県）</option>
+        <option value="akita">秋田大学医学部附属病院（秋田県）</option>
+        <option value="yamagata">山形大学医学部附属病院（山形県）</option>
+        <option value="fukushima">福島県立医科大学附属病院（福島県）</option>
+      </optgroup>
+      <optgroup label="関東地方">
+        <option value="ncchd">国立成育医療研究センター（東京都）</option>
+        <option value="utokyo">東京大学医学部附属病院（東京都）</option>
+        <option value="womens_med">東京女子医科大学病院（東京都）</option>
+        <option value="sakakibara">榊原記念病院（東京都）</option>
+        <option value="juntendo">順天堂大学医学部附属順天堂医院（東京都）</option>
+        <option value="tmd">東京医科歯科大学医学部附属病院（東京都）</option>
+        <option value="keio">慶應義塾大学病院（東京都）</option>
+        <option value="nms">日本医科大学付属病院（東京都）</option>
+        <option value="tmhp">東京都立小児総合医療センター（東京都）</option>
+        <option value="saitama_int">埼玉医科大学国際医療センター（埼玉県）</option>
+        <option value="saitama_child">埼玉県立小児医療センター（埼玉県）</option>
+        <option value="chiba_child">千葉県こども病院（千葉県）</option>
+        <option value="chiba_univ">千葉大学医学部附属病院（千葉県）</option>
+        <option value="kanagawa_child">神奈川県立こども医療センター（神奈川県）</option>
+        <option value="kitasato">北里大学病院（神奈川県）</option>
+        <option value="yokohama_city">横浜市立大学附属病院（神奈川県）</option>
+      </optgroup>
+      <optgroup label="中部地方">
+        <option value="niigata">新潟大学医歯学総合病院（新潟県）</option>
+        <option value="nagano_child">長野県立こども病院（長野県）</option>
+        <option value="gifu">岐阜県総合医療センター（岐阜県）</option>
+        <option value="nagoya_univ">名古屋大学医学部附属病院（愛知県）</option>
+        <option value="shizuoka_child">静岡こども病院（静岡県）</option>
+        <option value="aichi_child">あいち小児保険医療総合病院（愛知県）</option>
+      </optgroup>
+      <optgroup label="近畿地方">
+        <option value="kyoto_univ">京都大学医学部附属病院（京都府）</option>
+        <option value="kyoto_pref">京都府立医科大学附属病院（京都府）</option>
+        <option value="osaka_univ">大阪大学医学部附属病院（大阪府）</option>
+        <option value="osaka_mother">大阪母子医療センター（大阪府）</option>
+        <option value="ncvc">国立循環器病研究センター（大阪府）</option>
+      </optgroup>
+      <optgroup label="中国・四国地方">
+        <option value="okayama">岡山大学病院（岡山県）</option>
+        <option value="ehime">愛媛大学医学部附属病院（愛媛県）</option>
+        <option value="hyogo">兵庫県立こども病院（兵庫県）</option>
+      </optgroup>
+      <optgroup label="九州・沖縄地方">
+        <option value="kyushu_univ">九州大学病院（福岡県）</option>
+        <option value="fukuoka_child">福岡こども病院（福岡県）</option>
+        <option value="kumamoto_univ">熊本大学医学部附属病院（熊本県）</option>
+        <option value="kumamoto_red">熊本赤十字病院（熊本県）</option>
+        <option value="nanbu">南部医療センター（沖縄県）</option>
+        <option value="ryukyu">琉球大学病院（沖縄県）</option>
+      </optgroup>
+    </select><br><br>
+
+    <label>ID：</label>
+    <input type="number" id="case_id" placeholder="例: 1">
+    <small>※ 入力順に1,2,3と順に番号を振ってください</small><br><br>
+
+    <label>性別：</label>
+    <select id="sex">
+      <option value="M" selected>男</option>
+      <option value="F">女</option>
+    </select><br><br>
+
+    <label>生年月日：</label>
+    <input type="date" id="dob">
+    <div>
+     <label>年齢：</label>
+     <span id="age_display">（未計算）</span>
+    </div><br>
+    
+    <div>
+     <label>日齢：</label>
+     <span id="days_old_display"></span> 日
+    </div>
+    <div>
+     <label>新生児：</label>
+     <span id="neonate_flag">N</span>　
+     <label>小児：</label>
+     <span id="pediatric_flag">N</span>
+    </div><br>
+
+    <label>体重（kg）：</label>
+    <input type="number" step="0.1" id="weight" placeholder="例: 3.2"><br><br>
+  </fieldset><br>
+
+  <fieldset>
+    <legend>ECMO適応</legend>
+    <label>エクモ適応病態：</label>
+    <select id="ecmo_type">
+      <option value="respiratory">呼吸性（respiratory）</option>
+      <option value="cardiac">心原性（cardiac）</option>
+      <option value="ecpr">ECPR</option>
+    </select><br><br>
+
+<label>ECMOを必要とした病名（ICD-10ベース・複数選択可）：</label><br>
+<div id="diagnosis_section">
+  <div id="diagnosis_respiratory" style="display:none">
+    <label><input type="checkbox" name="icd10_codes" value="Q79.0"> 先天性横隔膜ヘルニア（Q79.0）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="P24.0"> 胎便吸引症候群（P24.0）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="P29.3"> 新生児遷延性肺高血圧症（P29.3）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="P22.0"> 呼吸窮迫症候群（P22.0）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="A41.9"> 敗血症（A41.9）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="J45"> 喘息（J45）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="J21.9"> 細気管支炎（J21.9）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="J12.9"> ウイルス性肺炎（J12.9）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="J69.0"> 誤嚥性肺炎（J69.0）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="J15.9"> 細菌性肺炎（J15.9）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="J18.9"> その他の肺炎（J18.9）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="A37"> 百日咳（A37）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="J96.0"> 急性呼吸不全（J96.0）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="P27.1"> 慢性肺疾患（P27.1）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="P26"> 肺出血（P26）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="T75.1"> 溺水（T75.1）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="T17.9"> 吸引（T17.9）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="T17"> 異物（T17）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="T81.9"> 術後または外傷（T81.9）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="Q20-Q28"> 先天性心疾患（Q20-Q28）</label><br>
+  </div>
+
+  <div id="diagnosis_cardiac" style="display:none">
+    <label><input type="checkbox" name="icd10_codes" value="Q20-Q28"> 先天性心疾患</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="Q20.4"> 単心室症候群（Q20.4）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="Q25.2"> 左心流出路閉塞（Q25.2）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="Q22.1"> 右心流出路閉塞（Q22.1）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="Q21.0"> 心室中隔欠損（Q21.0）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="Q21.8"> 肺血流減少型チアノーゼ心疾患（Q21.8）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="I46.9"> 心停止（I46.9）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="R57.0"> 心原性ショック（R57.0）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="I42.9"> 心筋症（I42.9）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="I40.9"> 心筋炎（I40.9）</label><br>
+    <label><input type="checkbox" name="icd10_codes" value="R99"> その他（R99）</label><br>
+  </div>
+
+  <div id="diagnosis_ecpr" style="display:none">
+    <label>任意ICD-10コード入力（日本基準ではなくWHO基準でお願いします）：</label>
+    <input type="text" id="ecpr_icd10_code" placeholder="例：I46.9 心停止、不明">
+    <a href="https://icd.who.int/browse10/2019/en" target="_blank">ICD-10検索</a>
+    <br><br>
+
+    <label>心停止場所：</label>
+    <select id="arrest_location">
+      <option value="or">手術室</option>
+      <option value="icu">ICU</option>
+      <option value="er">救急処置室</option>
+      <option value="ward">一般病棟</option>
+      <option value="transport">搬送中</option>
+      <option value="out">院外</option>
+      <option value="unknown">不明</option>
+    </select><br><br>
+
+    <label>心停止の目撃者：</label>
+    <select id="witnessed">
+      <option value="Y">Y</option>
+      <option value="N">N</option>
+    </select><br><br>
+
+    <label>ECMOカニュレーション場所：</label>
+    <select id="cannulation_location">
+      <option value="or">手術室</option>
+      <option value="icu">ICU</option>
+      <option value="er">救急処置室</option>
+      <option value="cath_lab">心臓カテーテル室</option>
+      <option value="other">その他</option>
+      <option value="unknown">不明</option>
+    </select><br><br>
+
+    <label>ECMO回路充填液：</label>
+    <select id="priming_fluid">
+      <option value="blood">血液</option>
+      <option value="crystalloid">細胞外液</option>
+      <option value="other">その他</option>
+      <option value="unknown">不明</option>
+    </select><br><br>
+
+    <label>低体温療法：</label>
+    <select id="hypothermia">
+      <option value="Y">Y</option>
+      <option value="N">N</option>
+    </select><br><br>
+
+    <label>CPRを行った時間（分）：</label>
+    <input type="number" id="cpr_duration" placeholder="例: 45"><br><br>
+  </div>
+
+  </div><br>
+  </fieldset><br>
+
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      const ecmoType = document.getElementById("ecmo_type");
+      const diagnosisResp = document.getElementById("diagnosis_respiratory");
+      const diagnosisCard = document.getElementById("diagnosis_cardiac");
+      const diagnosisEcpr = document.getElementById("diagnosis_ecpr");
+
+      function updateDiagnosisVisibility() {
+        diagnosisResp.style.display = ecmoType.value === "respiratory" ? "block" : "none";
+        diagnosisCard.style.display = ecmoType.value === "cardiac" ? "block" : "none";
+        diagnosisEcpr.style.display = ecmoType.value === "ecpr" ? "block" : "none";
+      }
+
+      ecmoType.addEventListener("change", updateDiagnosisVisibility);
+      updateDiagnosisVisibility();
+    });
+  </script>
+
+  <fieldset>
+    <legend>ECMO情報</legend>
+    <label>ECMO形式：</label>
+    <select id="ecmo_mode">
+      <option value="va" selected>V-A</option>
+      <option value="vv">V-V</option>
+      <option value="other">その他</option>
+    </select><br><br>
+
+    <label>ポンプの種類：</label>
+    <select id="pump_type">
+      <option value="centrifugal" selected>遠心</option>
+      <option value="roller">ローラー</option>
+      <option value="other">その他</option>
+    </select><br><br>
+
+    <label>人工肺の種類：</label>
+    <select id="oxygenator">
+      <option value="composite" selected>複合膜</option>
+      <option value="pmp">ポリメチルペンテン</option>
+      <option value="silicone">シリコン</option>
+    </select><br><br>
+
+    <label>ECMO導入日：</label>
+    <input type="date" id="ecmo_start_date"><br>
+    <div id="calculated_age"></div><br>
+
+    <label>ECMO離脱日：</label>
+    <input type="date" id="ecmo_end_date"><br>
+    <div id="ecmo_days"></div><br>
+   
+    <div><strong>ECMO使用日数：</strong> <span id="ecmo_days_display">-</span> 日</div><br>
+    
+    <!-- 抗凝固薬（複数回答可） -->
+    <label><strong>抗凝固薬（複数回答可）：</strong></label><br>
+    <label><input type="checkbox" name="anticoagulants" value="未分化ヘパリン"> 未分化ヘパリン</label><br>
+    <label><input type="checkbox" name="anticoagulants" value="ナファモスタットメシル酸塩"> ナファモスタットメシル酸塩</label><br>
+    <label><input type="checkbox" name="anticoagulants" value="その他"> その他</label><br><br>
+
+    <!-- 抗凝固薬を調整する指標（複数回答可） -->
+    <label><strong>抗凝固薬調整指標（複数回答可）：</strong></label><br>
+    <label><input type="checkbox" name="anticoag_monitoring" value="APTT"> APTT</label><br>
+    <label><input type="checkbox" name="anticoag_monitoring" value="ACT"> ACT</label><br>
+    <label><input type="checkbox" name="anticoag_monitoring" value="CK-CKH R(TEG6s®)"> CK-CKH R(TEG6s®)</label><br>
+    <label><input type="checkbox" name="anticoag_monitoring" value="その他"> その他</label><br><br>
+
+  </fieldset><br>
+
+  <fieldset>
+    <legend>転機</legend>
+
+    <label>ICU退室時生存：</label>
+    <select id="icu_survival">
+      <option value="Y" selected>Y</option>
+      <option value="N">N</option>
+    </select><br><br>
+
+    <label>ICU退室日：</label>
+    <input type="date" id="icu_discharge_date"><br><br>
+
+    <label>病院退院時生存：</label>
+    <select id="hospital_survival">
+      <option value="Y" selected>Y</option>
+      <option value="N">N</option>
+    </select><br><br>
+
+    <label>病院退院日：</label>
+    <input type="date" id="hospital_discharge_date"><br><br>
+
+    <!-- ECMO離脱後24時間生存 -->
+    <label>ECMO離脱後24h生存：</label>
+    <select id="ecmo_24h_survival">
+      <option value="Y" selected>Y</option>
+      <option value="N">N</option>
+    </select><br><br>
+
+    <!-- ECMO離脱理由（複数選択可） -->
+    <label>ECMO離脱理由：</label><br>
+    <label><input type="checkbox" name="ecmo_off_reason" value="不明"> 不明</label><br>
+    <label><input type="checkbox" name="ecmo_off_reason" value="回復"> 回復</label><br>
+    <label><input type="checkbox" name="ecmo_off_reason" value="予後不良"> 予後不良</label><br>
+    <label><input type="checkbox" name="ecmo_off_reason" value="医療資源不足"> 医療資源不足</label><br>
+    <label><input type="checkbox" name="ecmo_off_reason" value="合併症制御不能"> ECMOの合併症がコントロール不能</label><br>
+    <label><input type="checkbox" name="ecmo_off_reason" value="VAD"> VADへの移行</label><br>
+    <label><input type="checkbox" name="ecmo_off_reason" value="PLA"> Pumpless Lung Assistへの移行</label><br>
+    <label><input type="checkbox" name="ecmo_off_reason" value="心移植"> 心移植</label><br>
+    <label><input type="checkbox" name="ecmo_off_reason" value="肺移植"> 肺移植</label><br>
+    <label><input type="checkbox" name="ecmo_off_reason" value="心肺移植"> 心臓＋肺移植</label><br><br>
+
+  </fieldset><br>
+
+
+ <!-- 合併症セクション -->
+  <fieldset>
+    <legend>合併症</legend>
+    <h4>機械的合併症（Mechanical）</h4>
+
+    <label>人工肺不良：
+      <select id="oxygenator_failure">
+        <option value="N" selected>N</option>
+        <option value="Y">Y</option>
+      </select>
+      <span>（定義：酸素化不良または血栓形成による交換を要した）</span>
+      <input type="date" id="oxygenator_failure_date" class="complication-date">
+    </label><br>
+
+    <label>ポンプ不良：
+      <select id="pump_failure">
+        <option value="N" selected>N</option>
+        <option value="Y">Y</option>
+      </select>
+      <span>（定義：モーター・回転異常などで交換を要した）</span>
+      <input type="date" id="pump_failure_date" class="complication-date">
+    </label><br>
+
+    <label>カニューレの問題：
+      <select id="cannula_problem">
+        <option value="N" selected>N</option>
+        <option value="Y">Y</option>
+      </select>
+      <span>（定義：位置不良・閉塞・脱落など）</span>
+      <input type="date" id="cannula_problem_date" class="complication-date">
+    </label><br>
+
+    <label>空気塞栓：
+      <select id="air_embolism">
+        <option value="N" selected>N</option>
+        <option value="Y">Y</option>
+      </select>
+      <span>（定義：回路内に空気が混入し介入が必要だった場合）</span>
+      <input type="date" id="air_embolism_date" class="complication-date">
+    </label><br>
+
+    <h4>患者関連合併症（Patient）</h4>
+
+    <label>けいれん（EEG）：
+      <select id="seizure">
+        <option value="N" selected>N</option>
+        <option value="Y">Y</option>
+      </select>
+      <span>（定義：脳波で確認された臨床けいれん）</span>
+      <input type="date" id="seizure_date" class="complication-date">
+    </label><br>
+
+    <label>脳梗塞：
+      <select id="stroke">
+        <option value="N" selected>N</option>
+        <option value="Y">Y</option>
+      </select>
+      <span>（定義：画像により確認された）</span>
+      <input type="date" id="stroke_date" class="complication-date">
+    </label><br>
+
+    <label>頭蓋内出血（CT/MRI）：
+      <select id="ich_ct">
+        <option value="N" selected>N</option>
+        <option value="Y">Y</option>
+      </select>
+      <span>（定義：CT/MRIで確認された出血）</span>
+      <input type="date" id="ich_ct_date" class="complication-date" style="display:none;">
+    </label><br>
+
+    <label>頭蓋内出血（エコー）：
+      <select id="ich_echo">
+        <option value="X" selected>X</option>
+        <option value="N">N</option>
+        <option value="Y">Y</option>
+      </select>
+      <span>（定義：エコーで確認された出血 [X: 検査未実施または不明]）</span>
+      <input type="date" id="ich_echo_date" class="complication-date" style="display:none;">
+    </label><br>
+
+    <label>脳死：
+      <select id="brain_death">
+        <option value="N" selected>N</option>
+        <option value="Y">Y</option>
+      </select>
+      <span>（定義：脳死判定がなされた場合）</span>
+      <input type="date" id="brain_death_date" class="complication-date">
+    </label><br>
+
+    <label>心タンポナーデ：
+      <select id="tamponade">
+        <option value="N" selected>N</option>
+        <option value="Y">Y</option>
+      </select>
+      <span>（定義：エコー等で確認された心嚢液貯留により介入が必要）</span>
+      <input type="date" id="tamponade_date" class="complication-date">
+    </label><br>
+
+    <label>カニュレーション部出血：
+      <select id="cannula_bleeding">
+        <option value="N" selected>N</option>
+        <option value="Y">Y</option>
+      </select>
+      <span>（定義：圧迫・再縫合等の処置が必要な出血）</span>
+      <input type="date" id="cannula_bleeding_date" class="complication-date">
+    </label><br>
+
+    <label>消化管出血：
+      <select id="gi_bleed">
+        <option value="N" selected>N</option>
+        <option value="Y">Y</option>
+      </select>
+      <span>（定義：吐血・下血あり、介入または輸血を要した）</span>
+      <input type="date" id="gi_bleed_date" class="complication-date">
+    </label><br>
+
+    <label>四肢切断：
+      <select id="amputation">
+        <option value="N" selected>N</option>
+        <option value="Y">Y</option>
+      </select>
+      <span>（定義：虚血や感染により切断を要した場合）</span>
+      <input type="date" id="amputation_date" class="complication-date">
+    </label><br>
+  </fieldset>
+  <script>
+    window.regionMap = {
+      "北海道大学病院（北海道）": "北海道", "手稲渓仁会病院（北海道）": "北海道",
+      "旭川医科大学病院（北海道）": "北海道", "北海道立こども総合医療・療育センター（北海道）": "北海道",
+      "弘前大学医学部附属病院（青森県）": "東北", "岩手医科大学附属病院（岩手県）": "東北",
+      "宮城県立こども病院（宮城県）": "東北", "東北大学病院（宮城県）": "東北",
+      "秋田大学医学部附属病院（秋田県）": "東北", "山形大学医学部附属病院（山形県）": "東北",
+      "福島県立医科大学附属病院（福島県）": "東北",
+      "国立成育医療研究センター（東京都）": "関東", "東京大学医学部附属病院（東京都）": "関東",
+      "東京女子医科大学病院（東京都）": "関東", "榊原記念病院（東京都）": "関東",
+      "順天堂大学医学部附属順天堂医院（東京都）": "関東", "東京医科歯科大学医学部附属病院（東京都）": "関東",
+      "慶應義塾大学病院（東京都）": "関東", "日本医科大学付属病院（東京都）": "関東",
+      "東京都立小児総合医療センター（東京都）": "関東", "埼玉医科大学国際医療センター（埼玉県）": "関東",
+      "埼玉県立小児医療センター（埼玉県）": "関東", "千葉県こども病院（千葉県）": "関東",
+      "千葉大学医学部附属病院（千葉県）": "関東", "神奈川県立こども医療センター（神奈川県）": "関東",
+      "北里大学病院（神奈川県）": "関東", "横浜市立大学附属病院（神奈川県）": "関東",
+      "新潟大学医歯学総合病院（新潟県）": "中部", "長野県立こども病院（長野県）": "中部",
+      "岐阜県総合医療センター（岐阜県）": "中部", "名古屋大学医学部附属病院（愛知県）": "中部",
+      "静岡こども病院（静岡県）": "中部", "あいち小児保険医療総合病院（愛知県）": "中部",
+      "京都大学医学部附属病院（京都府）": "近畿", "京都府立医科大学附属病院（京都府）": "近畿",
+      "大阪大学医学部附属病院（大阪府）": "近畿", "大阪母子医療センター（大阪府）": "近畿",
+      "国立循環器病研究センター（大阪府）": "近畿", "岡山大学病院（岡山県）": "中国・四国",
+      "愛媛大学医学部附属病院（愛媛県）": "中国・四国", "兵庫県立こども病院（兵庫県）": "中国・四国",
+      "九州大学病院（福岡県）": "九州・沖縄", "福岡こども病院（福岡県）": "九州・沖縄",
+      "熊本大学医学部附属病院（熊本県）": "九州・沖縄", "熊本赤十字病院（熊本県）": "九州・沖縄",
+      "南部医療センター（沖縄県）": "九州・沖縄", "琉球大学病院（沖縄県）": "九州・沖縄"
+    };
+  </script>
+
+  <script>
+  function updateEcmoDays() {
+    const startStr = document.getElementById("ecmo_start_date").value;
+    const endStr = document.getElementById("ecmo_end_date").value;
+    const display = document.getElementById("ecmo_days_display");
+    if (!startStr || !endStr) {
+      display.textContent = "-";
+      return;
+    }
+    const start = new Date(startStr);
+    const end = new Date(endStr);
+    if (isNaN(start) || isNaN(end) || end < start) {
+      display.textContent = "日付エラー";
+      return;
+    }
+    // 日数計算は両端含めて+1
+    const diffDays = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
+    display.textContent = diffDays;
+  }
+  document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("ecmo_start_date").addEventListener("change", updateEcmoDays);
+    document.getElementById("ecmo_end_date").addEventListener("change", updateEcmoDays);
+  });
+</script>
+
+<script>
+  function calculateAgeAndFlags() {
+    const dob = document.getElementById("dob").value;
+    const ecmoDate = document.getElementById("ecmo_start_date").value;
+    const ageDisplay = document.getElementById("age_display");
+    const daysOldDisplay = document.getElementById("days_old_display");
+    const neonateFlag = document.getElementById("neonate_flag");
+    const pediatricFlag = document.getElementById("pediatric_flag");
+
+    if (!dob || !ecmoDate) {
+      ageDisplay.textContent = "（未計算）";
+      daysOldDisplay.textContent = "";
+      neonateFlag.textContent = "N";
+      pediatricFlag.textContent = "N";
+      return;
+    }
+
+    const birth = new Date(dob);
+    const start = new Date(ecmoDate);
+    if (isNaN(birth) || isNaN(start) || birth > start) {
+      ageDisplay.textContent = "（日付エラー）";
+      daysOldDisplay.textContent = "";
+      neonateFlag.textContent = "N";
+      pediatricFlag.textContent = "N";
+      return;
+    }
+
+    const diffTime = start.getTime() - birth.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    let years = start.getFullYear() - birth.getFullYear();
+    let months = start.getMonth() - birth.getMonth();
+    let days = start.getDate() - birth.getDate();
+    if (days < 0) {
+      months -= 1;
+      days += new Date(start.getFullYear(), start.getMonth(), 0).getDate();
+    }
+    if (months < 0) {
+      years -= 1;
+      months += 12;
+    }
+
+    ageDisplay.textContent = `${diffDays} 日齢 / ${years}歳 ${months}か月`;
+    daysOldDisplay.textContent = diffDays;
+    neonateFlag.textContent = diffDays <= 28 ? "Y" : "N";
+    pediatricFlag.textContent = diffDays >= 29 ? "Y" : "N";
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("dob").addEventListener("change", calculateAgeAndFlags);
+    document.getElementById("ecmo_start_date").addEventListener("change", calculateAgeAndFlags);
+  });
+</script>
+
+
+  <!-- ▼ 個別データExcel出力ボタン -->
+  <button onclick="downloadExcel()">入力内容をExcelでダウンロード</button>
+  <span style="display:block;">各施設で保管または印刷して1症例ずつデータを保管することを推奨します</span>
+  <!-- ▼ 管理者全件出力 -->
+  <button id="exportAllButton">登録済みデータをExcelでダウンロード（管理者用）</button>
+  <!-- ▼ ここに追加 -->
+  <button id="submitButton">登録</button>
+  <!-- ▼ 個別エクセル出力機能 -->
+  <script>
+    function downloadExcel() {
+      // 必要な値取得は元スクリプト通りでOK
+      const hospitalEl = document.getElementById("hospital");
+      const selectedHospitalText = hospitalEl.selectedOptions[0].text;
+      const region = window.regionMap[selectedHospitalText] || "不明";
+
+      const dob = new Date(document.getElementById("dob").value);
+      const ecmoStart = new Date(document.getElementById("ecmo_start_date").value);
+      let daysOld = "", monthsOld = "", yearsOld = "", neonateFlag = "";
+      if (!isNaN(dob) && !isNaN(ecmoStart)) {
+        const diffMs = ecmoStart - dob;
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const diffMonths = Math.floor(diffDays / 30.4375);
+        const diffYears = Math.floor(diffDays / 365.25);
+        daysOld = diffDays;
+        monthsOld = diffMonths;
+        yearsOld = diffYears;
+        neonateFlag = diffDays <= 28 ? "Y" : "N";
+      }
+
+      const ecmoType = document.getElementById("ecmo_type")?.value || "";
+
+      const record = {
+        region: region,
+        hospital: selectedHospitalText,
+        id: document.getElementById("case_id").value,
+        sex: document.getElementById("sex").value,
+        birth_date: document.getElementById("dob").value,
+        weight: document.getElementById("weight").value,
+        days_old: daysOld,
+        months_old: monthsOld,
+        years_old: yearsOld,
+        neonate_flag: neonateFlag,
+        ecmo_type: ecmoType,
+        ecmo_24h_survival: document.getElementById("ecmo_24h_survival")?.value || "",
+        ecmo_off_reasons: Array.from(document.querySelectorAll('input[name="ecmo_off_reason"]:checked')).map(cb => cb.value).join(", ") || "",
+        ...(ecmoType === "ecpr" && {
+          ecpr_icd10_code: document.getElementById("ecpr_icd10_code")?.value || "",
+          arrest_location: document.getElementById("arrest_location")?.value || "",
+          witnessed: document.getElementById("witnessed")?.value || "",
+          cannulation_location: document.getElementById("cannulation_location")?.value || "",
+          priming_fluid: document.getElementById("priming_fluid")?.value || "",
+          hypothermia: document.getElementById("hypothermia")?.value || "",
+          cpr_duration_min: document.getElementById("cpr_duration")?.value || ""
+        }),
+        ecmo_mode: document.getElementById("ecmo_mode").value,
+        pump_type: document.getElementById("pump_type").value,
+        oxygenator_type: document.getElementById("oxygenator").value,
+        ecmo_start_date: document.getElementById("ecmo_start_date").value,
+        ecmo_end_date: document.getElementById("ecmo_end_date").value,
+        ecmo_days: document.getElementById("ecmo_days_display").textContent,
+        anticoagulants: Array.from(document.querySelectorAll('input[name="anticoagulants"]:checked')).map(cb => cb.value).join(", ") || "",
+        anticoag_monitoring: Array.from(document.querySelectorAll('input[name="anticoag_monitoring"]:checked')).map(cb => cb.value).join(", ") || "",
+        icu_survival: document.getElementById("icu_survival").value,
+        icu_discharge: document.getElementById("icu_discharge_date").value,
+        hospital_survival: document.getElementById("hospital_survival").value,
+        hospital_discharge: document.getElementById("hospital_discharge_date").value
+      };
+
+      // 合併症
+      const complicationMap = {
+        oxygenator_failure: 'oxygenator_fail',
+        pump_failure: 'pump_fail',
+        cannula_problem: 'cannula_problem',
+        air_embolism: 'air_embolism',
+        seizure: 'seizure',
+        stroke: 'stroke',
+        ich_ct: 'ich_ct',
+        ich_echo: 'ich_echo',
+        brain_death: 'brain_death',
+        tamponade: 'tamponade',
+        cannula_bleeding: 'cannula_bleeding',
+        gi_bleed: 'gi_bleed',
+        amputation: 'amputation'
+      };
+      Object.entries(complicationMap).forEach(([id, shortKey]) => {
+        record[shortKey] = document.getElementById(id)?.value || "";
+        record[`${shortKey}_date`] = document.getElementById(id + "_date")?.value || "";
+      });
+
+      const headers = Object.keys(record);
+      const values = Object.values(record);
+
+      const ws = XLSX.utils.aoa_to_sheet([headers, values]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "ECMO_data");
+      XLSX.writeFile(wb, "ecmo_registry.xlsx");
+    }
+  </script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+import * as XLSX from "https://cdn.sheetjs.com/xlsx-0.19.3/package/xlsx.mjs";
+
+// Firebase設定（自分の設定でOK）
+const firebaseConfig = {
+  apiKey: "AIzaSyCTXgF0cgJ3Sz0gF0AI6bXDibIesXVI9Ck",
+  authDomain: "pediatric-ecmo-registry.firebaseapp.com",
+  projectId: "pediatric-ecmo-registry",
+  storageBucket: "pediatric-ecmo-registry.appspot.com",
+  messagingSenderId: "868465318743",
+  appId: "1:868465318743:web:6a4d522d1a716faa8afc12",
+  measurementId: "G-JBJ9F9C1RK"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// ▼ 登録ボタン
+document.getElementById("submitButton").addEventListener("click", async () => {
+  // 必要なデータ取得
+  const hospitalEl = document.getElementById("hospital");
+  const selectedHospitalText = hospitalEl.selectedOptions[0].text;
+  const region = window.regionMap[selectedHospitalText] || "不明";
+  const dob = new Date(document.getElementById("dob").value);
+  const ecmoStart = new Date(document.getElementById("ecmo_start_date").value);
+  let daysOld = "", monthsOld = "", yearsOld = "", neonateFlag = "";
+  if (!isNaN(dob) && !isNaN(ecmoStart)) {
+    const diffMs = ecmoStart - dob;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffMonths = Math.floor(diffDays / 30.4375);
+    const diffYears = Math.floor(diffDays / 365.25);
+    daysOld = diffDays;
+    monthsOld = diffMonths;
+    yearsOld = diffYears;
+    neonateFlag = diffDays <= 28 ? "Y" : "N";
+  }
+  const ecmoType = document.getElementById("ecmo_type")?.value || "";
+
+  const record = {
+    region: region,
+    hospital: selectedHospitalText,
+    id: document.getElementById("case_id").value,
+    sex: document.getElementById("sex").value,
+    birth_date: document.getElementById("dob").value,
+    weight: document.getElementById("weight").value,
+    days_old: daysOld,
+    months_old: monthsOld,
+    years_old: yearsOld,
+    neonate_flag: neonateFlag,
+    ecmo_type: ecmoType,
+    ecmo_24h_survival: document.getElementById("ecmo_24h_survival")?.value || "",
+    ecmo_off_reasons: Array.from(document.querySelectorAll('input[name="ecmo_off_reason"]:checked')).map(cb => cb.value).join(", ") || "",
+    ...(ecmoType === "ecpr" && {
+      ecpr_icd10_code: document.getElementById("ecpr_icd10_code")?.value || "",
+      arrest_location: document.getElementById("arrest_location")?.value || "",
+      witnessed: document.getElementById("witnessed")?.value || "",
+      cannulation_location: document.getElementById("cannulation_location")?.value || "",
+      priming_fluid: document.getElementById("priming_fluid")?.value || "",
+      hypothermia: document.getElementById("hypothermia")?.value || "",
+      cpr_duration_min: document.getElementById("cpr_duration")?.value || ""
+    }),
+    ecmo_mode: document.getElementById("ecmo_mode").value,
+    pump_type: document.getElementById("pump_type").value,
+    oxygenator_type: document.getElementById("oxygenator").value,
+    ecmo_start_date: document.getElementById("ecmo_start_date").value,
+    ecmo_end_date: document.getElementById("ecmo_end_date").value,
+    ecmo_days: document.getElementById("ecmo_days_display").textContent,
+    anticoagulants: Array.from(document.querySelectorAll('input[name="anticoagulants"]:checked')).map(cb => cb.value).join(", ") || "",
+    anticoag_monitoring: Array.from(document.querySelectorAll('input[name="anticoag_monitoring"]:checked')).map(cb => cb.value).join(", ") || "",
+    icu_survival: document.getElementById("icu_survival").value,
+    icu_discharge: document.getElementById("icu_discharge_date").value,
+    hospital_survival: document.getElementById("hospital_survival").value,
+    hospital_discharge: document.getElementById("hospital_discharge_date").value
+  };
+
+  // 合併症
+  const complicationMap = {
+    oxygenator_failure: 'oxygenator_fail',
+    pump_failure: 'pump_fail',
+    cannula_problem: 'cannula_problem',
+    air_embolism: 'air_embolism',
+    seizure: 'seizure',
+    stroke: 'stroke',
+    ich_ct: 'ich_ct',
+    ich_echo: 'ich_echo',
+    brain_death: 'brain_death',
+    tamponade: 'tamponade',
+    cannula_bleeding: 'cannula_bleeding',
+    gi_bleed: 'gi_bleed',
+    amputation: 'amputation'
+  };
+  Object.entries(complicationMap).forEach(([id, shortKey]) => {
+    record[shortKey] = document.getElementById(id)?.value || "";
+    record[`${shortKey}_date`] = document.getElementById(id + "_date")?.value || "";
+  });
+
+  // Firestoreに登録
+  try {
+    await addDoc(collection(db, "ecmo_registry"), record);
+    alert("✅ 登録が完了しました！");
+  } catch (e) {
+    alert("❌ 登録に失敗しました: " + e.message);
+    console.error(e);
+  }
+});
+
+// ▼ 管理者全件エクセル出力ボタン
+document.getElementById("exportAllButton").addEventListener("click", async () => {
+  const password = prompt("管理者パスワードを入力してください：");
+  if (password !== "pecmoREGI") {
+    alert("❌ パスワードが違います");
+    return;
+  }
+  try {
+    const snapshot = await getDocs(collection(db, "ecmo_registry"));
+    const records = [];
+    snapshot.forEach(doc => records.push(doc.data()));
+
+    if (records.length === 0) {
+      alert("📭 登録されたデータがありません");
+      return;
+    }
+
+    const ws = XLSX.utils.json_to_sheet(records);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "ECMO_Registry");
+    XLSX.writeFile(wb, "ecmo_registry_all.xlsx");
+    alert("✅ 登録データをExcelファイルとして保存しました！");
+  } catch (e) {
+    console.error("❌ データ取得に失敗しました：", e);
+    alert("❌ ダウンロードに失敗しました");
+  }
+});
+</script>
+
+
+</body>
+</html>
