@@ -560,30 +560,7 @@
   <!-- ▼ 管理者全件出力 -->
   <button id="exportAllButton">登録済みデータをExcelでダウンロード（管理者用）</button>
   <!-- ▼ ここに追加 -->
-  <button id="submitButton">登録</button>
 
-  <section id="delete-request-section" style="margin-top: 40px;">
-    <p><strong>登録後の修正はセキュリティ上できません。大変申し訳ございませんが、入力ミスをした場合は削除依頼を下のフォームから行ってください。</strong></p>
-    <fieldset>
-      <legend>登録内容の削除依頼</legend>
-      <label for="delete_facility">施設名：</label>
-      <input type="text" id="delete_facility" placeholder="例：〇〇病院"><br><br>
-
-      <label for="delete_record_id">削除依頼ID：</label>
-      <input type="text" id="delete_record_id" placeholder="例：123"><br><br>
-
-      <label for="delete_record_date">入力日付：</label>
-      <input type="date" id="delete_record_date"><br><br>
-
-      <label for="delete_note">自由記載：</label><br>
-      <textarea id="delete_note" rows="4" cols="50" placeholder="削除依頼の理由などをご記載ください"></textarea><br><br>
-
-      <button type="button" id="deleteRequestButton">削除依頼メールを作成</button>
-      <p style="margin-top: 8px; font-size: 0.9em;">※ 削除依頼メールは <a href="mailto:sakaiwataru1128@gmail.com">sakaiwataru1128@gmail.com</a> 宛に自動で作成されます。</p>
-    </fieldset>
-  </section>
-  <!-- ▼ 個別エクセル出力機能 -->
-  <script>
     function downloadExcel() {
       // 必要な値取得は元スクリプト通りでOK
       const hospitalEl = document.getElementById("hospital");
@@ -784,45 +761,7 @@ document.getElementById("submitButton").addEventListener("click", async () => {
   } catch (e) {
     alert("❌ 登録に失敗しました: " + e.message);
     console.error(e);
-  }
-});
 
-const deleteRequestButton = document.getElementById("deleteRequestButton");
-if (deleteRequestButton) {
-  deleteRequestButton.addEventListener("click", () => {
-    const facility = document.getElementById("delete_facility")?.value.trim() || "";
-    const recordId = document.getElementById("delete_record_id")?.value.trim() || "";
-    const recordDate = document.getElementById("delete_record_date")?.value || "";
-    const note = document.getElementById("delete_note")?.value.trim() || "";
-
-    if (!facility) {
-      alert("施設名を入力してください。");
-      return;
-    }
-
-    if (!recordId && !recordDate) {
-      alert("削除依頼IDまたは入力日付のいずれかを入力してください。");
-      return;
-    }
-
-    const subject = `ECMOレジストリ削除依頼 (${facility})`;
-    const bodyLines = [
-      "以下の内容で削除をお願いします。",
-      "",
-      `施設名: ${facility}`,
-      `削除依頼ID: ${recordId || "-"}`,
-      `入力日付: ${recordDate || "-"}`,
-      "",
-      "自由記載:",
-      note || "-"
-    ];
-    const mailtoUrl = `mailto:sakaiwataru1128@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyLines.join("\n"))}`;
-    window.location.href = mailtoUrl;
-  });
-}
-
-// ▼ 管理者全件エクセル出力ボタン
-document.getElementById("exportAllButton").addEventListener("click", async () => {
   const password = prompt("管理者パスワードを入力してください：");
   if (password !== "pecmoREGI") {
     alert("❌ パスワードが違います");
