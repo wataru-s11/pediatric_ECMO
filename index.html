@@ -598,7 +598,26 @@
   <span style="display:block;">各施設で保管または印刷して1症例ずつデータを保管することを推奨します</span>
   <!-- ▼ 管理者全件出力 -->
   <button id="exportAllButton">登録済みデータをExcelでダウンロード（管理者用）</button>
-  <!-- ▼ ここに追加 -->
+
+  <fieldset>
+    <legend>登録データ削除依頼</legend>
+    <p>登録済みデータの削除を希望される場合は、以下の内容を入力のうえ「削除依頼メールを送信」ボタンを押してください。</p>
+    <label for="delete_facility">施設名：</label>
+    <input type="text" id="delete_facility" placeholder="例：○○大学病院"><br><br>
+
+    <label for="delete_record_id">削除依頼ID：</label>
+    <input type="text" id="delete_record_id" placeholder="例：123"><br>
+    <small>※ 削除を希望する症例IDが不明な場合は未入力のままで構いません。</small><br><br>
+
+    <label for="delete_record_date">入力日付：</label>
+    <input type="date" id="delete_record_date"><br>
+    <small>※ 削除を希望する症例の入力日をご記載ください。日付が不明な場合は未入力で構いません。</small><br><br>
+
+    <label for="delete_note">自由記載：</label><br>
+    <textarea id="delete_note" rows="4" cols="50" placeholder="削除理由などがあればご記入ください"></textarea><br><br>
+
+    <button type="button" id="deleteRequestButton">削除依頼メールを送信</button>
+  </fieldset>
 
   <script>
     function downloadExcel() {
@@ -842,9 +861,9 @@ if (deleteRequestButton) {
     }
 
     setTimeout(() => {
-      const sent = confirm("メール送信画面が開きました。送信が完了したら『OK』、送信を中止する場合は『キャンセル』を押してください。");
+      const sent = confirm("メール送信画面が開きました。送信を完了しましたか？完了した場合は『OK』を押してください。");
       if (sent) {
-        alert("送信されました。");
+        alert("送信が完了しました。ありがとうございました。");
       }
     }, 500);
   });
