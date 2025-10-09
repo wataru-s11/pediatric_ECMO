@@ -616,7 +616,7 @@
     <label for="delete_note">自由記載：</label><br>
     <textarea id="delete_note" rows="4" cols="50" placeholder="削除理由などがあればご記入ください"></textarea><br><br>
 
-    <button type="button" id="deleteRequestButton">削除依頼メールを作成</button>
+    <button type="button" id="deleteRequestButton">削除依頼メールを送信</button>
   </fieldset>
 
   <script>
@@ -861,9 +861,9 @@ if (deleteRequestButton) {
     }
 
     setTimeout(() => {
-      const sent = confirm("メール送信画面が開きました。送信が完了したら『OK』、送信を中止する場合は『キャンセル』を押してください。");
+      const sent = confirm("メール送信画面が開きました。送信を完了しましたか？完了した場合は『OK』を押してください。");
       if (sent) {
-        alert("送信されました。");
+        alert("送信が完了しました。ありがとうございました。");
       }
     }, 500);
   });
