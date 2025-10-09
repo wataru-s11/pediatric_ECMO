@@ -116,7 +116,7 @@
 
     <label>ID：</label>
     <input type="number" id="case_id" placeholder="例: 1">
-
+    <small>※ 入力順に1,2,3と順に番号を振ってください。1分でもECMOを離脱した場合は、新たな症例（ID）として登録してください。</small><!-- コメント: ECMOを一度離脱したら新規ID扱い --><br><br>
 
     <label>性別：</label>
     <select id="sex">
@@ -359,7 +359,12 @@
 
 
  <!-- 合併症セクション -->
+  <fieldset>
+    <legend>合併症</legend>
+    <p><small>備考：①複数回同欄の合併症があった場合、初回の合併症日時を入力してください。②ECMO試行期間中に新たに発生した、またはECMOによって悪化した有害事象、またはECMO中発症と臨床的に推測されるものを入力してください。</small></p>
+    <h4>機械的合併症（Mechanical）</h4>
 
+    <label>人工肺不良：
       <select id="oxygenator_failure">
         <option value="N" selected>N</option>
         <option value="Y">Y</option>
@@ -588,14 +593,44 @@
 </script>
 
 
-  <!-- ▼ 個別データExcel出力ボタン -->
-  <button onclick="downloadExcel()">入力内容をExcelでダウンロード</button>
-  <span style="display:block;">各施設で保管または印刷して1症例ずつデータを保管することを推奨します</span>
-  <!-- ▼ 管理者全件出力 -->
-  <button id="exportAllButton">登録済みデータをExcelでダウンロード（管理者用）</button>
-  <!-- ▼ ここに追加 -->
+  <div id="submission-tools" style="margin-top: 24px;">
+    <div id="export-actions">
+      <!-- ▼ 個別データExcel出力ボタン -->
+      <button id="downloadExcelButton">入力内容をExcelでダウンロード</button>
+      <span style="display:block;">各施設で保管または印刷して1症例ずつデータを保管することを推奨します</span>
+      <!-- ▼ 管理者全件出力 -->
+      <button id="exportAllButton">登録済みデータをExcelでダウンロード（管理者用）</button>
+      <!-- ▼ ここに追加 -->
+      <button id="submitButton">登録</button>
+    </div>
 
-    function downloadExcel() {
+    <section id="delete-request-section" style="margin-top: 32px;">
+      <p><strong>登録後の修正はセキュリティ上できません。大変申し訳ございませんが、入力ミスをした場合は削除依頼を下のフォームから行ってください。</strong></p>
+      <fieldset>
+        <legend>登録内容の削除依頼</legend>
+        <form id="deleteRequestForm">
+          <label for="delete_facility">施設名：</label>
+          <input type="text" id="delete_facility" name="facility" placeholder="例：〇〇病院" required><br><br>
+
+          <label for="delete_record_id">削除依頼ID：</label>
+          <input type="text" id="delete_record_id" name="recordId" placeholder="例：123"><br><br>
+
+          <label for="delete_record_date">入力日付：</label>
+          <input type="date" id="delete_record_date" name="recordDate"><br><br>
+
+          <label for="delete_note">自由記載：</label><br>
+          <textarea id="delete_note" name="note" rows="4" cols="50" placeholder="削除依頼の理由などをご記載ください"></textarea><br><br>
+
+          <button type="submit" id="deleteRequestButton">削除依頼メールを送信</button>
+        </form>
+        <p style="margin-top: 8px; font-size: 0.9em;">※ ボタンを押すと削除依頼メールが <a href="mailto:sakaiwataru1128@gmail.com">sakaiwataru1128@gmail.com</a> 宛に自動で作成され、メールソフトが開きます。</p>
+      </fieldset>
+    </section>
+  </div>
+
+  <!-- ▼ 個別エクセル出力機能 -->
+  <script>
+    window.downloadExcel = function downloadExcel() {
       // 必要な値取得は元スクリプト通りでOK
       const hospitalEl = document.getElementById("hospital");
       const selectedHospitalText = hospitalEl.selectedOptions[0].text;
@@ -703,123 +738,189 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// ▼ 登録ボタン
-document.getElementById("submitButton").addEventListener("click", async () => {
-  // 必要なデータ取得
-  const hospitalEl = document.getElementById("hospital");
-  const selectedHospitalText = hospitalEl.selectedOptions[0].text;
-  const region = window.regionMap[selectedHospitalText] || "不明";
-  const dob = new Date(document.getElementById("dob").value);
-  const ecmoStart = new Date(document.getElementById("ecmo_start_date").value);
-  let daysOld = "", monthsOld = "", yearsOld = "", neonateFlag = "";
-  if (!isNaN(dob) && !isNaN(ecmoStart)) {
-    const diffMs = ecmoStart - dob;
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    const diffMonths = Math.floor(diffDays / 30.4375);
-    const diffYears = Math.floor(diffDays / 365.25);
-    daysOld = diffDays;
-    monthsOld = diffMonths;
-    yearsOld = diffYears;
-    neonateFlag = diffDays <= 28 ? "Y" : "N";
+document.addEventListener("DOMContentLoaded", () => {
+  const submitButton = document.getElementById("submitButton");
+  const exportAllButton = document.getElementById("exportAllButton");
+  const downloadExcelButton = document.getElementById("downloadExcelButton");
+  const deleteRequestForm = document.getElementById("deleteRequestForm");
+
+  if (downloadExcelButton) {
+    downloadExcelButton.addEventListener("click", () => {
+      if (typeof window.downloadExcel === "function") {
+        window.downloadExcel();
+      }
+    });
   }
-  const ecmoType = document.getElementById("ecmo_type")?.value || "";
 
-  const selectedCodes = Array.from(document.querySelectorAll('input[name="icd10_codes"]:checked')).map(cb => cb.value);
+  // ▼ 登録ボタン
+  submitButton?.addEventListener("click", async () => {
+    // 必要なデータ取得
+    const hospitalEl = document.getElementById("hospital");
+    const selectedHospitalText = hospitalEl.selectedOptions[0].text;
+    const region = window.regionMap[selectedHospitalText] || "不明";
+    const dob = new Date(document.getElementById("dob").value);
+    const ecmoStart = new Date(document.getElementById("ecmo_start_date").value);
+    let daysOld = "", monthsOld = "", yearsOld = "", neonateFlag = "";
+    if (!isNaN(dob) && !isNaN(ecmoStart)) {
+      const diffMs = ecmoStart - dob;
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const diffMonths = Math.floor(diffDays / 30.4375);
+      const diffYears = Math.floor(diffDays / 365.25);
+      daysOld = diffDays;
+      monthsOld = diffMonths;
+      yearsOld = diffYears;
+      neonateFlag = diffDays <= 28 ? "Y" : "N";
+    }
+    const ecmoType = document.getElementById("ecmo_type")?.value || "";
 
-  const record = {
-    region: region,
-    hospital: selectedHospitalText,
-    id: document.getElementById("case_id").value,
-    sex: document.getElementById("sex").value,
-    birth_date: document.getElementById("dob").value,
-    weight: document.getElementById("weight").value,
-    days_old: daysOld,
-    months_old: monthsOld,
-    years_old: yearsOld,
-    neonate_flag: neonateFlag,
-    ecmo_type: ecmoType,
-    icd10_codes: selectedCodes,
-    ecmo_24h_survival: document.getElementById("ecmo_24h_survival")?.value || "",
-    ecmo_off_reasons: Array.from(document.querySelectorAll('input[name="ecmo_off_reason"]:checked')).map(cb => cb.value).join(", ") || "",
-    ...(ecmoType === "ecpr" && {
-      ecpr_icd10_code: document.getElementById("ecpr_icd10_code")?.value || "",
-      arrest_location: document.getElementById("arrest_location")?.value || "",
-      witnessed: document.getElementById("witnessed")?.value || "",
-      cannulation_location: document.getElementById("cannulation_location")?.value || "",
-      priming_fluid: document.getElementById("priming_fluid")?.value || "",
-      hypothermia: document.getElementById("hypothermia")?.value || "",
-      cpr_duration_min: document.getElementById("cpr_duration")?.value || ""
-    }),
-    ecmo_mode: document.getElementById("ecmo_mode").value,
-    pump_type: document.getElementById("pump_type").value,
-    oxygenator_type: document.getElementById("oxygenator").value,
-    ecmo_start_date: document.getElementById("ecmo_start_date").value,
-    ecmo_end_date: document.getElementById("ecmo_end_date").value,
-    ecmo_days: document.getElementById("ecmo_days_display").textContent,
-    anticoagulants: Array.from(document.querySelectorAll('input[name="anticoagulants"]:checked')).map(cb => cb.value).join(", ") || "",
-    anticoag_monitoring: Array.from(document.querySelectorAll('input[name="anticoag_monitoring"]:checked')).map(cb => cb.value).join(", ") || "",
-    icu_survival: document.getElementById("icu_survival").value,
-    icu_discharge: document.getElementById("icu_discharge_date").value,
-    hospital_survival: document.getElementById("hospital_survival").value,
-    hospital_discharge: document.getElementById("hospital_discharge_date").value
-  };
+    const selectedCodes = Array.from(document.querySelectorAll('input[name="icd10_codes"]:checked')).map(cb => cb.value);
 
-  // 合併症
-  const complicationMap = {
-    oxygenator_failure: 'oxygenator_fail',
-    pump_failure: 'pump_fail',
-    cannula_problem: 'cannula_problem',
-    air_embolism: 'air_embolism',
-    seizure: 'seizure',
-    stroke: 'stroke',
-    ich_ct: 'ich_ct',
-    ich_echo: 'ich_echo',
-    brain_death: 'brain_death',
-    tamponade: 'tamponade',
-    cannula_bleeding: 'cannula_bleeding',
-    gi_bleed: 'gi_bleed',
-    amputation: 'amputation'
-  };
-  Object.entries(complicationMap).forEach(([id, shortKey]) => {
-    record[shortKey] = document.getElementById(id)?.value || "";
-    record[`${shortKey}_date`] = document.getElementById(id + "_date")?.value || "";
+    const record = {
+      region: region,
+      hospital: selectedHospitalText,
+      id: document.getElementById("case_id").value,
+      sex: document.getElementById("sex").value,
+      birth_date: document.getElementById("dob").value,
+      weight: document.getElementById("weight").value,
+      days_old: daysOld,
+      months_old: monthsOld,
+      years_old: yearsOld,
+      neonate_flag: neonateFlag,
+      ecmo_type: ecmoType,
+      icd10_codes: selectedCodes,
+      ecmo_24h_survival: document.getElementById("ecmo_24h_survival")?.value || "",
+      ecmo_off_reasons: Array.from(document.querySelectorAll('input[name="ecmo_off_reason"]:checked')).map(cb => cb.value).join(", ") || "",
+      ...(ecmoType === "ecpr" && {
+        ecpr_icd10_code: document.getElementById("ecpr_icd10_code")?.value || "",
+        arrest_location: document.getElementById("arrest_location")?.value || "",
+        witnessed: document.getElementById("witnessed")?.value || "",
+        cannulation_location: document.getElementById("cannulation_location")?.value || "",
+        priming_fluid: document.getElementById("priming_fluid")?.value || "",
+        hypothermia: document.getElementById("hypothermia")?.value || "",
+        cpr_duration_min: document.getElementById("cpr_duration")?.value || ""
+      }),
+      ecmo_mode: document.getElementById("ecmo_mode").value,
+      pump_type: document.getElementById("pump_type").value,
+      oxygenator_type: document.getElementById("oxygenator").value,
+      ecmo_start_date: document.getElementById("ecmo_start_date").value,
+      ecmo_end_date: document.getElementById("ecmo_end_date").value,
+      ecmo_days: document.getElementById("ecmo_days_display").textContent,
+      anticoagulants: Array.from(document.querySelectorAll('input[name="anticoagulants"]:checked')).map(cb => cb.value).join(", ") || "",
+      anticoag_monitoring: Array.from(document.querySelectorAll('input[name="anticoag_monitoring"]:checked')).map(cb => cb.value).join(", ") || "",
+      icu_survival: document.getElementById("icu_survival").value,
+      icu_discharge: document.getElementById("icu_discharge_date").value,
+      hospital_survival: document.getElementById("hospital_survival").value,
+      hospital_discharge: document.getElementById("hospital_discharge_date").value
+    };
+
+    // 合併症
+    const complicationMap = {
+      oxygenator_failure: 'oxygenator_fail',
+      pump_failure: 'pump_fail',
+      cannula_problem: 'cannula_problem',
+      air_embolism: 'air_embolism',
+      seizure: 'seizure',
+      stroke: 'stroke',
+      ich_ct: 'ich_ct',
+      ich_echo: 'ich_echo',
+      brain_death: 'brain_death',
+      tamponade: 'tamponade',
+      cannula_bleeding: 'cannula_bleeding',
+      gi_bleed: 'gi_bleed',
+      amputation: 'amputation'
+    };
+    Object.entries(complicationMap).forEach(([id, shortKey]) => {
+      record[shortKey] = document.getElementById(id)?.value || "";
+      record[`${shortKey}_date`] = document.getElementById(id + "_date")?.value || "";
+    });
+
+    // Firestoreに登録
+    try {
+      await addDoc(collection(db, "ecmo_registry"), record);
+      alert("✅ 登録が完了しました！");
+      document.querySelectorAll('input[name="icd10_codes"]').forEach(cb => {
+        cb.checked = false;
+      });
+    } catch (e) {
+      alert("❌ 登録に失敗しました: " + e.message);
+      console.error(e);
+    }
   });
 
-  // Firestoreに登録
-  try {
-    await addDoc(collection(db, "ecmo_registry"), record);
-    alert("✅ 登録が完了しました！");
-    document.querySelectorAll('input[name="icd10_codes"]').forEach(cb => {
-      cb.checked = false;
+  if (deleteRequestForm) {
+    deleteRequestForm.addEventListener("submit", event => {
+      event.preventDefault();
+
+      const facility = document.getElementById("delete_facility")?.value.trim() || "";
+      const recordId = document.getElementById("delete_record_id")?.value.trim() || "";
+      const recordDate = document.getElementById("delete_record_date")?.value || "";
+      const note = document.getElementById("delete_note")?.value.trim() || "";
+
+      if (!facility) {
+        alert("施設名を入力してください。");
+        return;
+      }
+
+      if (!recordId && !recordDate) {
+        alert("削除依頼IDまたは入力日付のいずれかを入力してください。");
+        return;
+      }
+
+      const subject = `ECMOレジストリ削除依頼 (${facility})`;
+      const bodyLines = [
+        "以下の内容で削除をお願いします。",
+        "",
+        `施設名: ${facility}`,
+        `削除依頼ID: ${recordId || "-"}`,
+        `入力日付: ${recordDate || "-"}`,
+        "",
+        "自由記載:",
+        note || "-"
+      ];
+      const mailtoUrl = `mailto:sakaiwataru1128@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyLines.join("\n"))}`;
+
+      const mailWindow = window.open(mailtoUrl, "_blank");
+
+      if (!mailWindow) {
+        window.location.href = mailtoUrl;
+      }
+
+      setTimeout(() => {
+        const sent = confirm("メール送信画面が開きました。送信が完了したら『OK』、送信を中止する場合は『キャンセル』を押してください。");
+        if (sent) {
+          alert("送信されました。");
+        }
+      }, 500);
     });
-  } catch (e) {
-    alert("❌ 登録に失敗しました: " + e.message);
-    console.error(e);
-
-  const password = prompt("管理者パスワードを入力してください：");
-  if (password !== "pecmoREGI") {
-    alert("❌ パスワードが違います");
-    return;
   }
-  try {
-    const snapshot = await getDocs(collection(db, "ecmo_registry"));
-    const records = [];
-    snapshot.forEach(doc => records.push(doc.data()));
 
-    if (records.length === 0) {
-      alert("📭 登録されたデータがありません");
+  // ▼ 管理者全件エクセル出力ボタン
+  exportAllButton?.addEventListener("click", async () => {
+    const password = prompt("管理者パスワードを入力してください：");
+    if (password !== "pecmoREGI") {
+      alert("❌ パスワードが違います");
       return;
     }
+    try {
+      const snapshot = await getDocs(collection(db, "ecmo_registry"));
+      const records = [];
+      snapshot.forEach(doc => records.push(doc.data()));
 
-    const ws = XLSX.utils.json_to_sheet(records);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "ECMO_Registry");
-    XLSX.writeFile(wb, "ecmo_registry_all.xlsx");
-    alert("✅ 登録データをExcelファイルとして保存しました！");
-  } catch (e) {
-    console.error("❌ データ取得に失敗しました：", e);
-    alert("❌ ダウンロードに失敗しました");
-  }
+      if (records.length === 0) {
+        alert("📭 登録されたデータがありません");
+        return;
+      }
+
+      const ws = XLSX.utils.json_to_sheet(records);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "ECMO_Registry");
+      XLSX.writeFile(wb, "ecmo_registry_all.xlsx");
+      alert("✅ 登録データをExcelファイルとして保存しました！");
+    } catch (e) {
+      console.error("❌ データ取得に失敗しました：", e);
+      alert("❌ ダウンロードに失敗しました");
+    }
+  });
 });
 </script>
 
