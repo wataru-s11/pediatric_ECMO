@@ -14,6 +14,39 @@
 <body>
   <h1>ECMO レジストリ入力フォーム</h1>
 
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const placeholderPattern = /\[\u6dfb\u524a\u3057\u3066\u306d\]/g;
+
+      const textNodesToClean = [];
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        if (typeof node.nodeValue === 'string') {
+          placeholderPattern.lastIndex = 0;
+          if (placeholderPattern.test(node.nodeValue)) {
+            textNodesToClean.push(node);
+          }
+        }
+      }
+
+      textNodesToClean.forEach(node => {
+        placeholderPattern.lastIndex = 0;
+        node.nodeValue = node.nodeValue.replace(placeholderPattern, '');
+      });
+
+      document.querySelectorAll('*').forEach(element => {
+        Array.from(element.attributes).forEach(attr => {
+          placeholderPattern.lastIndex = 0;
+          if (placeholderPattern.test(attr.value)) {
+            placeholderPattern.lastIndex = 0;
+            attr.value = attr.value.replace(placeholderPattern, '');
+          }
+        });
+      });
+    });
+  </script>
+
   <fieldset>
     <legend>患者情報</legend>
 <label>病院名：</label>
