@@ -852,7 +852,23 @@ if (deleteRequestButton) {
       "自由記載:",
       note || "-"
     ];
-    const mailtoUrl = `mailto:sakaiwataru1128@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyLines.join("\n"))}`;
+    const ccRecipients = ["w-sakai1128@sapmed.ac.jp"];
+    const bccRecipients = [];
+
+    const queryParts = [];
+
+    if (ccRecipients.length > 0) {
+      queryParts.push(`cc=${encodeURIComponent(ccRecipients.join(","))}`);
+    }
+
+    if (bccRecipients.length > 0) {
+      queryParts.push(`bcc=${encodeURIComponent(bccRecipients.join(","))}`);
+    }
+
+    queryParts.push(`subject=${encodeURIComponent(subject)}`);
+    queryParts.push(`body=${encodeURIComponent(bodyLines.join("\n"))}`);
+
+    const mailtoUrl = `mailto:sakaiwataru1128@gmail.com?${queryParts.join("&")}`;
 
     const mailWindow = window.open(mailtoUrl, "_blank");
 
