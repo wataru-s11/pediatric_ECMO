@@ -83,7 +83,6 @@
 
     <label>ID：</label>
     <input type="number" id="case_id" placeholder="例: 1">
-    <small>※ 入力順に1,2,3と順に番号を振ってください。1分でもECMOを離脱した場合は、新たな症例（ID）として登録してください。</small><br><br>
 
     <label>性別：</label>
     <select id="sex">
@@ -315,7 +314,7 @@
     <label><input type="checkbox" name="ecmo_off_reason" value="回復"> 回復</label><br>
     <label><input type="checkbox" name="ecmo_off_reason" value="予後不良"> 予後不良</label><br>
     <label><input type="checkbox" name="ecmo_off_reason" value="医療資源不足"> 医療資源不足</label><br>
-    <label><input type="checkbox" name="ecmo_off_reason" value="合併症制御不能"> ECMOの合併症がコントロール不能</label><br>
+    <label><input type="checkbox" name="ecmo_off_reason" value="合併症制御不能"> ECMOの合併症がコントロール不能（エクモのデバイス・マシントラブルを含む）</label><br>
     <label><input type="checkbox" name="ecmo_off_reason" value="VAD"> VADへの移行</label><br>
     <label><input type="checkbox" name="ecmo_off_reason" value="PLA"> Pumpless Lung Assistへの移行</label><br>
     <label><input type="checkbox" name="ecmo_off_reason" value="心移植"> 心移植</label><br>
@@ -328,6 +327,7 @@
  <!-- 合併症セクション -->
   <fieldset>
     <legend>合併症</legend>
+    <p><small>備考：①複数回同欄の合併症があった場合、初回の合併症日時を入力してください。[添削してね] ②ECMO試行期間中に新たに発生した、またはECMOによって悪化した有害事象、またはECMO中発症と臨床的に推測されるものを入力してください。</small></p>
     <h4>機械的合併症（Mechanical）</h4>
 
     <label>人工肺不良：
@@ -566,6 +566,27 @@
   <button id="exportAllButton">登録済みデータをExcelでダウンロード（管理者用）</button>
   <!-- ▼ ここに追加 -->
   <button id="submitButton">登録</button>
+
+  <section id="delete-request-section" style="margin-top: 40px;">
+    <p><strong>登録後の修正はセキュリティ上できません。大変申し訳ございませんが、入力ミスをした場合は削除依頼を下のフォームから行ってください。</strong></p>
+    <fieldset>
+      <legend>登録内容の削除依頼</legend>
+      <label for="delete_facility">施設名：</label>
+      <input type="text" id="delete_facility" placeholder="例：〇〇病院"><br><br>
+
+      <label for="delete_record_id">削除依頼ID：</label>
+      <input type="text" id="delete_record_id" placeholder="例：123"><br><br>
+
+      <label for="delete_record_date">入力日付：</label>
+      <input type="date" id="delete_record_date"><br><br>
+
+      <label for="delete_note">自由記載：</label><br>
+      <textarea id="delete_note" rows="4" cols="50" placeholder="削除依頼の理由などをご記載ください"></textarea><br><br>
+
+      <button type="button" id="deleteRequestButton">削除依頼メールを作成</button>
+      <p style="margin-top: 8px; font-size: 0.9em;">※ 削除依頼メールは <a href="mailto:sakaiwataru1128@gmail.com">sakaiwataru1128@gmail.com</a> 宛に自動で作成されます。</p>
+    </fieldset>
+  </section>
   <!-- ▼ 個別エクセル出力機能 -->
   <script>
     function downloadExcel() {
@@ -770,6 +791,40 @@ document.getElementById("submitButton").addEventListener("click", async () => {
     console.error(e);
   }
 });
+
+const deleteRequestButton = document.getElementById("deleteRequestButton");
+if (deleteRequestButton) {
+  deleteRequestButton.addEventListener("click", () => {
+    const facility = document.getElementById("delete_facility")?.value.trim() || "";
+    const recordId = document.getElementById("delete_record_id")?.value.trim() || "";
+    const recordDate = document.getElementById("delete_record_date")?.value || "";
+    const note = document.getElementById("delete_note")?.value.trim() || "";
+
+    if (!facility) {
+      alert("施設名を入力してください。");
+      return;
+    }
+
+    if (!recordId && !recordDate) {
+      alert("削除依頼IDまたは入力日付のいずれかを入力してください。");
+      return;
+    }
+
+    const subject = `ECMOレジストリ削除依頼 (${facility})`;
+    const bodyLines = [
+      "以下の内容で削除をお願いします。",
+      "",
+      `施設名: ${facility}`,
+      `削除依頼ID: ${recordId || "-"}`,
+      `入力日付: ${recordDate || "-"}`,
+      "",
+      "自由記載:",
+      note || "-"
+    ];
+    const mailtoUrl = `mailto:sakaiwataru1128@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyLines.join("\n"))}`;
+    window.location.href = mailtoUrl;
+  });
+}
 
 // ▼ 管理者全件エクセル出力ボタン
 document.getElementById("exportAllButton").addEventListener("click", async () => {
