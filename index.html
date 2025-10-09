@@ -599,29 +599,7 @@
   <!-- ▼ 管理者全件出力 -->
   <button id="exportAllButton">登録済みデータをExcelでダウンロード（管理者用）</button>
   <!-- ▼ ここに追加 -->
-  <button id="submitButton">登録</button>
 
-  <section id="delete-request-section" style="margin-top: 40px;">
-    <p><strong>登録後の修正はセキュリティ上できません。大変申し訳ございませんが、入力ミスをした場合は削除依頼を下のフォームから行ってください。</strong></p>
-    <fieldset>
-      <legend>登録内容の削除依頼</legend>
-      <label for="delete_facility">施設名：</label>
-      <input type="text" id="delete_facility" placeholder="例：〇〇病院"><br><br>
-
-      <label for="delete_record_id">削除依頼ID：</label>
-      <input type="text" id="delete_record_id" placeholder="例：123"><br><br>
-
-      <label for="delete_record_date">入力日付：</label>
-      <input type="date" id="delete_record_date"><br><br>
-
-      <label for="delete_note">自由記載：</label><br>
-      <textarea id="delete_note" rows="4" cols="50" placeholder="削除依頼の理由などをご記載ください"></textarea><br><br>
-
-      <button type="button" id="deleteRequestButton">削除依頼メールを送信</button>
-      <p style="margin-top: 8px; font-size: 0.9em;">※ ボタンを押すと削除依頼メールが <a href="mailto:sakaiwataru1128@gmail.com">sakaiwataru1128@gmail.com</a> 宛に自動で作成され、メールソフトが開きます。</p>
-    </fieldset>
-  </section>
-  <!-- ▼ 個別エクセル出力機能 -->
   <script>
     function downloadExcel() {
       // 必要な値取得は元スクリプト通りでOK
