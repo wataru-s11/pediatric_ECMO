@@ -616,10 +616,48 @@
     <label for="delete_note">自由記載：</label><br>
     <textarea id="delete_note" rows="4" cols="50" placeholder="削除理由などがあればご記入ください"></textarea><br><br>
 
+    <label for="delete_attachment">添付画像（任意）：</label>
+    <input type="file" id="delete_attachment" accept="image/*"><br>
+    <small>※ 送信したい画像ファイルがあれば指定してください（1枚のみ）。</small><br><br>
+
     <button type="button" id="deleteRequestButton">削除依頼メールを送信</button>
   </fieldset>
 
   <script>
+    let SENDGRID_API_KEY = sessionStorage.getItem("sendgridApiKey") || "";
+
+    function requestSendGridApiKey() {
+      const input = prompt("SendGrid APIキーを入力してください（ページを閉じると保存は解除されます）：");
+      if (input && input.trim()) {
+        SENDGRID_API_KEY = input.trim();
+        sessionStorage.setItem("sendgridApiKey", SENDGRID_API_KEY);
+        return SENDGRID_API_KEY;
+      }
+      return null;
+    }
+
+    function clearStoredSendGridApiKey() {
+      sessionStorage.removeItem("sendgridApiKey");
+      SENDGRID_API_KEY = "";
+    }
+
+    function readFileAsBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result;
+          if (typeof result === "string") {
+            const commaIndex = result.indexOf(",");
+            resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result);
+          } else {
+            reject(new Error("ファイルの読み込みに失敗しました"));
+          }
+        };
+        reader.onerror = () => reject(new Error("ファイルの読み込みに失敗しました"));
+        reader.readAsDataURL(file);
+      });
+    }
+
     function downloadExcel() {
       // 必要な値取得は元スクリプト通りでOK
       const hospitalEl = document.getElementById("hospital");
@@ -825,11 +863,12 @@ document.getElementById("submitButton").addEventListener("click", async () => {
 
 const deleteRequestButton = document.getElementById("deleteRequestButton");
 if (deleteRequestButton) {
-  deleteRequestButton.addEventListener("click", () => {
+  deleteRequestButton.addEventListener("click", async () => {
     const facility = document.getElementById("delete_facility")?.value.trim() || "";
     const recordId = document.getElementById("delete_record_id")?.value.trim() || "";
     const recordDate = document.getElementById("delete_record_date")?.value || "";
     const note = document.getElementById("delete_note")?.value.trim() || "";
+    const attachmentFile = document.getElementById("delete_attachment")?.files?.[0];
 
     if (!facility) {
       alert("施設名を入力してください。");
@@ -838,6 +877,15 @@ if (deleteRequestButton) {
 
     if (!recordId && !recordDate) {
       alert("削除依頼IDまたは入力日付のいずれかを入力してください。");
+      return;
+    }
+
+    let apiKey = SENDGRID_API_KEY;
+    if (!apiKey) {
+      apiKey = requestSendGridApiKey();
+    }
+    if (!apiKey) {
+      alert("SendGridのAPIキーが設定されていません。管理者にお問い合わせください。");
       return;
     }
 
@@ -852,36 +900,92 @@ if (deleteRequestButton) {
       "自由記載:",
       note || "-"
     ];
-    const ccRecipients = ["w-sakai1128@sapmed.ac.jp"];
+
+    const ccRecipients = ["w-sakai1128@sapmed.ac.jp"].filter(Boolean).map(email => ({ email }));
     const bccRecipients = [];
 
-    const queryParts = [];
+    const personalizations = [{
+      to: [{ email: "sakai@tron2040.com" }],
+      subject: subject
+    }];
 
     if (ccRecipients.length > 0) {
-      queryParts.push(`cc=${encodeURIComponent(ccRecipients.join(","))}`);
+      personalizations[0].cc = ccRecipients;
     }
 
     if (bccRecipients.length > 0) {
-      queryParts.push(`bcc=${encodeURIComponent(bccRecipients.join(","))}`);
+      personalizations[0].bcc = bccRecipients.map(email => ({ email }));
     }
 
-    queryParts.push(`subject=${encodeURIComponent(subject)}`);
-    queryParts.push(`body=${encodeURIComponent(bodyLines.join("\n"))}`);
+    const payload = {
+      personalizations,
+      from: {
+        email: "no-reply@tron2040.com",
+        name: "ECMO Registry"
+      },
+      content: [
+        {
+          type: "text/plain",
+          value: bodyLines.join("\n")
+        }
+      ]
+    };
 
-    const mailtoUrl = `mailto:sakaiwataru1128@gmail.com?${queryParts.join("&")}`;
-
-    const mailWindow = window.open(mailtoUrl, "_blank");
-
-    if (!mailWindow) {
-      window.location.href = mailtoUrl;
-    }
-
-    setTimeout(() => {
-      const sent = confirm("メール送信画面が開きました。送信を完了しましたか？完了した場合は『OK』を押してください。");
-      if (sent) {
-        alert("送信が完了しました。ありがとうございました。");
+    if (attachmentFile) {
+      try {
+        const base64Content = await readFileAsBase64(attachmentFile);
+        payload.attachments = [
+          {
+            content: base64Content,
+            filename: attachmentFile.name,
+            type: attachmentFile.type || "application/octet-stream"
+          }
+        ];
+      } catch (error) {
+        alert(error.message);
+        return;
       }
-    }, 500);
+    }
+
+    const originalText = deleteRequestButton.textContent;
+    deleteRequestButton.disabled = true;
+    deleteRequestButton.textContent = "送信中...";
+
+    try {
+      const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        if (response.status === 401) {
+          clearStoredSendGridApiKey();
+          throw new Error("SendGrid APIキーが無効です。再度入力してください。");
+        }
+        throw new Error(errorText || `ステータスコード: ${response.status}`);
+      }
+
+      alert("送信が完了しました。ありがとうございました。");
+      document.getElementById("delete_facility")?.value = "";
+      document.getElementById("delete_record_id")?.value = "";
+      document.getElementById("delete_record_date")?.value = "";
+      document.getElementById("delete_note")?.value = "";
+      const attachmentInput = document.getElementById("delete_attachment");
+      if (attachmentInput) {
+        attachmentInput.value = "";
+      }
+    } catch (error) {
+      console.error("SendGrid error", error);
+      alert(`❌ メールの送信に失敗しました: ${error.message}`);
+    } finally {
+      deleteRequestButton.disabled = false;
+      deleteRequestButton.textContent = originalText;
+    }
   });
 }
 
