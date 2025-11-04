@@ -9,38 +9,7 @@
     fieldset { margin-bottom: 20px; }
     th, td { white-space: pre-line; word-break: break-all; }
     button { margin: 8px 0; }
-    .sendgrid-settings {
-      border: 1px solid #d0d7de;
-      padding: 16px;
-      margin: 24px 0;
-      background: #f6f8fa;
-      border-radius: 6px;
-    }
-    .sendgrid-settings h2 {
-      margin-top: 0;
-      font-size: 1.1em;
-    }
-    .sendgrid-settings p {
-      margin: 0 0 12px 0;
-    }
-    .sendgrid-settings input[type="password"] {
-      width: 100%;
-      max-width: 360px;
-      padding: 6px 8px;
-      box-sizing: border-box;
-    }
-    .sendgrid-settings .buttons {
-      margin-top: 8px;
-    }
-    .sendgrid-settings .buttons button {
-      margin-right: 8px;
-    }
-    .sendgrid-status {
-      display: block;
-      margin-top: 8px;
-      font-size: 0.9em;
-      color: #555;
-    }
+
   </style>
 </head>
 <body>
@@ -631,18 +600,6 @@
   <!-- ▼ 管理者全件出力 -->
   <button id="exportAllButton">登録済みデータをExcelでダウンロード（管理者用）</button>
 
-  <section class="sendgrid-settings" id="sendgrid-settings">
-    <h2>SendGrid APIキー設定</h2>
-    <p>削除依頼メールを送信するには、SendGridのAPIキーを入力してください。キーはこのブラウザのセッションにのみ保存されます。</p>
-    <label for="sendgrid_api_key">APIキー</label>
-    <input type="password" id="sendgrid_api_key" placeholder="例：SG.xxxxxx" autocomplete="off">
-    <div class="buttons">
-      <button type="button" id="save_sendgrid_api_key">保存</button>
-      <button type="button" id="clear_sendgrid_api_key">クリア</button>
-    </div>
-    <span id="sendgrid_api_key_status" class="sendgrid-status">未設定</span>
-  </section>
-
   <fieldset>
     <legend>登録データ削除依頼</legend>
     <p>登録済みデータの削除を希望される場合は、以下の内容を入力のうえ「削除依頼メールを作成」ボタンを押してください。</p>
@@ -666,142 +623,6 @@
 
     <button type="button" id="deleteRequestButton">削除依頼メールを送信</button>
   </fieldset>
-
-  <script>
-
-    }
-    function getPreconfiguredSendGridApiKey() {
-      if (typeof window !== "undefined" && window.SENDGRID_API_KEY) {
-        return String(window.SENDGRID_API_KEY).trim();
-      }
-      return "";
-    }
-
-    function getStoredSendGridApiKey() {
-      try {
-        return sessionStorage.getItem("sendgridApiKey") || "";
-      } catch (error) {
-        console.warn("sessionStorage is not available.", error);
-        return "";
-      }
-    }
-
-    function setStoredSendGridApiKey(key) {
-      try {
-        sessionStorage.setItem("sendgridApiKey", key);
-      } catch (error) {
-        console.warn("Failed to store SendGrid API key.", error);
-      }
-    }
-
-    function refreshSendGridApiKeyStatus(message, isError = false) {
-      const statusEl = document.getElementById("sendgrid_api_key_status");
-      if (!statusEl) {
-        return;
-      }
-
-      const preconfigured = getPreconfiguredSendGridApiKey();
-      if (preconfigured) {
-        statusEl.textContent = message || "システムに設定されたAPIキーを使用します。";
-        statusEl.style.color = isError ? "#d93025" : "";
-        return;
-      }
-
-      const stored = getStoredSendGridApiKey();
-      if (message) {
-        statusEl.textContent = message;
-      } else {
-        statusEl.textContent = stored ? "保存済み（このブラウザのみ有効）" : "未設定";
-      }
-      statusEl.style.color = isError ? "#d93025" : "";
-    }
-
-    function clearStoredSendGridApiKey(message, isError = false) {
-      try {
-        sessionStorage.removeItem("sendgridApiKey");
-      } catch (error) {
-        console.warn("Failed to clear SendGrid API key.", error);
-      }
-      const input = document.getElementById("sendgrid_api_key");
-      if (input) {
-        input.value = "";
-      }
-      refreshSendGridApiKeyStatus(message, isError);
-    }
-
-    function requestSendGridApiKey() {
-      const stored = getStoredSendGridApiKey();
-      if (stored) {
-        return stored;
-      }
-
-      const input = document.getElementById("sendgrid_api_key");
-      if (input) {
-        const value = input.value.trim();
-        if (value) {
-          setStoredSendGridApiKey(value);
-          refreshSendGridApiKeyStatus();
-          return value;
-        }
-      }
-
-      refreshSendGridApiKeyStatus("APIキーを入力してください。", true);
-      return "";
-    }
-
-    document.addEventListener("DOMContentLoaded", () => {
-      refreshSendGridApiKeyStatus();
-
-      const preconfigured = getPreconfiguredSendGridApiKey();
-      const apiKeyInput = document.getElementById("sendgrid_api_key");
-      const saveButton = document.getElementById("save_sendgrid_api_key");
-      const clearButton = document.getElementById("clear_sendgrid_api_key");
-
-      if (apiKeyInput && !preconfigured) {
-        const storedKey = getStoredSendGridApiKey();
-        if (storedKey) {
-          apiKeyInput.value = storedKey;
-        }
-      }
-
-      if (preconfigured) {
-        if (apiKeyInput) {
-          apiKeyInput.placeholder = "システムにより設定済みのため入力不要です";
-          apiKeyInput.disabled = true;
-        }
-        if (saveButton) {
-          saveButton.disabled = true;
-        }
-        if (clearButton) {
-          clearButton.disabled = true;
-        }
-        return;
-      }
-
-      if (saveButton) {
-        saveButton.addEventListener("click", () => {
-          if (!apiKeyInput) {
-            return;
-          }
-          const value = apiKeyInput.value.trim();
-          if (!value) {
-            refreshSendGridApiKeyStatus("APIキーが未入力です。", true);
-            apiKeyInput.focus();
-            return;
-          }
-          setStoredSendGridApiKey(value);
-          refreshSendGridApiKeyStatus();
-          alert("SendGridのAPIキーを保存しました。ブラウザを閉じるとリセットされます。");
-        });
-      }
-
-      if (clearButton) {
-        clearButton.addEventListener("click", () => {
-          clearStoredSendGridApiKey();
-          alert("SendGridのAPIキーを削除しました。");
-        });
-      }
-    });
 
     function readFileAsBase64(file) {
       return new Promise((resolve, reject) => {
@@ -1042,15 +863,7 @@ if (deleteRequestButton) {
       return;
     }
 
-    const preconfiguredApiKey = getPreconfiguredSendGridApiKey();
-    let apiKey = preconfiguredApiKey;
-    if (!apiKey) {
-      apiKey = requestSendGridApiKey();
-    }
-    if (!apiKey) {
-      alert("SendGridのAPIキーを入力してください。ページ上部の「SendGrid APIキー設定」欄から設定できます。");
-      const apiKeyInput = document.getElementById("sendgrid_api_key");
-      apiKeyInput?.focus();
+
       return;
     }
 
@@ -1126,14 +939,6 @@ if (deleteRequestButton) {
         body: JSON.stringify(payload)
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        if (response.status === 401) {
-          clearStoredSendGridApiKey("APIキーが無効です。再入力してください。", true);
-          throw new Error("SendGrid APIキーが無効です。再度入力してください。");
-        }
-        throw new Error(errorText || `ステータスコード: ${response.status}`);
-      }
 
       alert("送信が完了しました。ありがとうございました。");
       document.getElementById("delete_facility")?.value = "";
