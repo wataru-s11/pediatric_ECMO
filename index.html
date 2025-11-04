@@ -624,21 +624,12 @@
   </fieldset>
 
   <script>
-    let SENDGRID_API_KEY = sessionStorage.getItem("sendgridApiKey") || "";
 
-    function requestSendGridApiKey() {
-      const input = prompt("SendGrid APIキーを入力してください（ページを閉じると保存は解除されます）：");
-      if (input && input.trim()) {
-        SENDGRID_API_KEY = input.trim();
-        sessionStorage.setItem("sendgridApiKey", SENDGRID_API_KEY);
-        return SENDGRID_API_KEY;
-      }
-      return null;
     }
 
     function clearStoredSendGridApiKey() {
       sessionStorage.removeItem("sendgridApiKey");
-      SENDGRID_API_KEY = "";
+
     }
 
     function readFileAsBase64(file) {
