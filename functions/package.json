@@ -1,0 +1,19 @@
+{
+  "name": "pediatric-ecmo-functions",
+  "version": "1.0.0",
+  "description": "Cloud Functions for pediatric ECMO registry",
+  "main": "index.js",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions",
+    "test": "echo 'No tests specified'"
+  },
+  "engines": {
+    "node": "18"
+  },
+  "dependencies": {
+    "@sendgrid/mail": "^7.7.0",
+    "cors": "^2.8.5",
+    "firebase-functions": "^4.4.1"
+  }
+}
