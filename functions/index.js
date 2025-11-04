@@ -1,5 +1,12 @@
 const functions = require("firebase-functions");
 const sgMail = require("@sendgrid/mail");
+const admin = require("firebase-admin");
+
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+
+const FieldValue = admin.firestore.FieldValue;
 
 const config = functions.config();
 const DEFAULT_EMAIL = "sakai@tron2040.com";
@@ -33,6 +40,89 @@ function buildMessageBody({ facility, recordId, recordDate, note }) {
   ];
 
   return lines.join("\n");
+}
+
+function sanitizeDeleteRequestPayload(rawPayload) {
+  const payload = rawPayload || {};
+  const toString = value => (value === undefined || value === null ? "" : String(value));
+
+  const facility = toString(payload.facility).trim();
+  const recordId = toString(payload.recordId).trim();
+  const recordDate = toString(payload.recordDate).trim();
+  const note = toString(payload.note);
+
+  if (!facility) {
+    throw new Error("施設名は必須です。");
+  }
+
+  if (!recordId && !recordDate) {
+    throw new Error("削除依頼IDまたは入力日付のいずれかを入力してください。");
+  }
+
+  let attachment = null;
+  if (payload.attachment && payload.attachment.content) {
+    attachment = {
+      content: toString(payload.attachment.content),
+      filename: toString(payload.attachment.filename) || "attachment",
+      type: toString(payload.attachment.type) || "application/octet-stream",
+      disposition: "attachment"
+    };
+  }
+
+  return {
+    facility,
+    recordId,
+    recordDate,
+    note,
+    attachment
+  };
+}
+
+function createSendgridMessage(payload) {
+  const sanitized = sanitizeDeleteRequestPayload(payload);
+
+  const toAddresses = SENDGRID_TO.split(",")
+    .map(address => address.trim())
+    .filter(Boolean);
+
+  if (toAddresses.length === 0) {
+    throw new Error("宛先メールアドレスの設定が正しくありません。");
+  }
+
+  const message = {
+    to: toAddresses,
+    from: SENDGRID_FROM,
+    subject: `【削除依頼】${sanitized.facility}`,
+    text: buildMessageBody(sanitized),
+    html: buildMessageBody(sanitized)
+      .split("\n")
+      .map(line => (line ? `<p>${escapeHtml(line)}</p>` : "<p>&nbsp;</p>"))
+      .join("")
+  };
+
+  if (sanitized.attachment) {
+    message.attachments = [sanitized.attachment];
+  }
+
+  return { message, sanitized };
+}
+
+async function sendDeleteRequestEmail(payload) {
+  const { message, sanitized } = createSendgridMessage(payload);
+  await sgMail.send(message);
+  return sanitized;
+}
+
+function extractSendgridError(error) {
+  return (
+    (error.response &&
+      error.response.body &&
+      error.response.body.errors &&
+      error.response.body.errors[0] &&
+      error.response.body.errors[0].message) ||
+    error.message ||
+    "Unknown error"
+  );
 }
 
 function applyCors(req, res) {
@@ -79,72 +169,82 @@ exports.sendDeleteRequest = functions
       return;
     }
 
-    const {
-      facility = "",
-      recordId = "",
-      recordDate = "",
-      note = "",
-      attachment
-    } = req.body || {};
-
-    if (!facility.trim()) {
-      res.status(400).json({ error: "施設名は必須です。" });
+    let sanitizedPayload;
+    try {
+      sanitizedPayload = sanitizeDeleteRequestPayload(req.body || {});
+    } catch (validationError) {
+      res.status(400).json({ error: validationError.message });
       return;
-    }
-
-    if (!recordId.trim() && !recordDate.trim()) {
-      res.status(400).json({
-        error: "削除依頼IDまたは入力日付のいずれかを入力してください。"
-      });
-      return;
-    }
-
-    const toAddresses = SENDGRID_TO.split(",")
-      .map(address => address.trim())
-      .filter(Boolean);
-
-    if (toAddresses.length === 0) {
-      res.status(500).json({
-        error: "宛先メールアドレスの設定が正しくありません。"
-      });
-      return;
-    }
-
-    const message = {
-      to: toAddresses,
-      from: SENDGRID_FROM,
-      subject: `【削除依頼】${facility}`,
-      text: buildMessageBody({ facility, recordId, recordDate, note }),
-      html: buildMessageBody({ facility, recordId, recordDate, note })
-        .split("\n")
-        .map(line => (line ? `<p>${escapeHtml(line)}</p>` : "<p>&nbsp;</p>"))
-        .join("")
-    };
-
-    if (attachment && attachment.content) {
-      message.attachments = [
-        {
-          content: attachment.content,
-          filename: attachment.filename || "attachment",
-          type: attachment.type || "application/octet-stream",
-          disposition: "attachment"
-        }
-      ];
     }
 
     try {
-      await sgMail.send(message);
+      await sendDeleteRequestEmail(sanitizedPayload);
       res.status(200).json({ success: true });
     } catch (error) {
       console.error("SendGrid error", error);
-      const messageText =
-        (error.response &&
-          error.response.body &&
-          error.response.body.errors &&
-          error.response.body.errors[0] &&
-          error.response.body.errors[0].message) ||
-        error.message ||
-        "Unknown error";
+      const messageText = extractSendgridError(error);
       res.status(500).json({ error: messageText });
+    }
+  });
+
+exports.processDeleteRequest = functions
+  .region("asia-northeast1")
+  .firestore.document("delete_requests/{requestId}")
+  .onCreate(async snapshot => {
+    if (!SENDGRID_KEY) {
+      await snapshot.ref.update({
+        status: "error",
+        errorMessage: "SendGrid API key is not configured.",
+        lastError: "SendGrid API key is not configured.",
+        processedAt: FieldValue.serverTimestamp()
+      });
+      return;
+    }
+
+    if (!SENDGRID_FROM || !SENDGRID_TO) {
+      await snapshot.ref.update({
+        status: "error",
+        errorMessage: "SendGrid sender/recipient is not configured.",
+        lastError: "SendGrid sender/recipient is not configured.",
+        processedAt: FieldValue.serverTimestamp()
+      });
+      return;
+    }
+
+    let sanitizedPayload;
+    try {
+      sanitizedPayload = sanitizeDeleteRequestPayload(snapshot.data() || {});
+    } catch (validationError) {
+      await snapshot.ref.update({
+        status: "error",
+        errorMessage: validationError.message,
+        lastError: validationError.message,
+        processedAt: FieldValue.serverTimestamp()
+      });
+      return;
+    }
+
+    try {
+      await snapshot.ref.update({
+        status: "processing",
+        processingStartedAt: FieldValue.serverTimestamp(),
+        errorMessage: FieldValue.delete()
+      });
+      await sendDeleteRequestEmail(sanitizedPayload);
+      await snapshot.ref.update({
+        status: "sent",
+        processedAt: FieldValue.serverTimestamp(),
+        lastError: null,
+        errorMessage: FieldValue.delete()
+      });
+    } catch (error) {
+      console.error("SendGrid error", error);
+      const messageText = extractSendgridError(error);
+      await snapshot.ref.update({
+        status: "error",
+        errorMessage: messageText,
+        lastError: messageText,
+        processedAt: FieldValue.serverTimestamp()
+      });
     }
   });
