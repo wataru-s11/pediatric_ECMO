@@ -625,11 +625,9 @@
 
   <script>
 
-    }
-
-    function clearStoredSendGridApiKey() {
-      sessionStorage.removeItem("sendgridApiKey");
-
+    const SENDGRID_API_KEY = "YOUR_SENDGRID_API_KEY_HERE"; // TODO: 実際のSendGrid APIキーを設定してください
+    if (typeof window !== "undefined") {
+      window.SENDGRID_API_KEY = SENDGRID_API_KEY;
     }
 
     function readFileAsBase64(file) {
@@ -871,12 +869,9 @@ if (deleteRequestButton) {
       return;
     }
 
-    let apiKey = SENDGRID_API_KEY;
+    const apiKey = (globalThis.SENDGRID_API_KEY || "").trim();
     if (!apiKey) {
-      apiKey = requestSendGridApiKey();
-    }
-    if (!apiKey) {
-      alert("SendGridのAPIキーが設定されていません。管理者にお問い合わせください。");
+      alert("SendGridのAPIキーが設定されていません。コード内のSENDGRID_API_KEYを設定してください。");
       return;
     }
 
@@ -954,10 +949,6 @@ if (deleteRequestButton) {
 
       if (!response.ok) {
         const errorText = await response.text();
-        if (response.status === 401) {
-          clearStoredSendGridApiKey();
-          throw new Error("SendGrid APIキーが無効です。再度入力してください。");
-        }
         throw new Error(errorText || `ステータスコード: ${response.status}`);
       }
 
