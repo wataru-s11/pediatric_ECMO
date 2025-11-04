@@ -37,8 +37,11 @@ function buildMessageBody({ facility, recordId, recordDate, note }) {
 
 function applyCors(req, res) {
   const origin = req.headers.origin;
-  res.set("Access-Control-Allow-Origin", origin || "*");
-  res.set("Vary", "Origin");
+  const allowOrigin = origin && origin !== "null" ? origin : "*";
+  res.set("Access-Control-Allow-Origin", allowOrigin);
+  if (allowOrigin !== "*") {
+    res.set("Vary", "Origin");
+  }
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.set("Access-Control-Allow-Headers", "Content-Type");
 }
