@@ -30,13 +30,13 @@
   <h1>ECMO レジストリ入力フォーム</h1>
 
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const placeholderPattern = /\[\u6dfb\u524a\u3057\u3066\u306d\]/g;
+    document.addEventListener('DOMContentLoaded', function () {
+      var placeholderPattern = /\[\u6dfb\u524a\u3057\u3066\u306d\]/g;
 
-      const textNodesToClean = [];
-      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      var textNodesToClean = [];
+      var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       while (walker.nextNode()) {
-        const node = walker.currentNode;
+        var node = walker.currentNode;
         if (typeof node.nodeValue === 'string') {
           placeholderPattern.lastIndex = 0;
           if (placeholderPattern.test(node.nodeValue)) {
@@ -45,20 +45,25 @@
         }
       }
 
-      textNodesToClean.forEach(node => {
+      for (var i = 0; i < textNodesToClean.length; i += 1) {
+        var textNode = textNodesToClean[i];
         placeholderPattern.lastIndex = 0;
-        node.nodeValue = node.nodeValue.replace(placeholderPattern, '');
-      });
+        textNode.nodeValue = textNode.nodeValue.replace(placeholderPattern, '');
+      }
 
-      document.querySelectorAll('*').forEach(element => {
-        Array.from(element.attributes).forEach(attr => {
+      var allElements = document.querySelectorAll('*');
+      for (var j = 0; j < allElements.length; j += 1) {
+        var element = allElements[j];
+        var attrs = element.attributes;
+        for (var k = 0; k < attrs.length; k += 1) {
+          var attr = attrs[k];
           placeholderPattern.lastIndex = 0;
           if (placeholderPattern.test(attr.value)) {
             placeholderPattern.lastIndex = 0;
             attr.value = attr.value.replace(placeholderPattern, '');
           }
-        });
-      });
+        }
+      }
     });
   </script>
 
@@ -264,11 +269,11 @@
   </fieldset><br>
 
   <script>
-    window.addEventListener('DOMContentLoaded', () => {
-      const ecmoType = document.getElementById("ecmo_type");
-      const diagnosisResp = document.getElementById("diagnosis_respiratory");
-      const diagnosisCard = document.getElementById("diagnosis_cardiac");
-      const diagnosisEcpr = document.getElementById("diagnosis_ecpr");
+    window.addEventListener('DOMContentLoaded', function () {
+      var ecmoType = document.getElementById("ecmo_type");
+      var diagnosisResp = document.getElementById("diagnosis_respiratory");
+      var diagnosisCard = document.getElementById("diagnosis_cardiac");
+      var diagnosisEcpr = document.getElementById("diagnosis_ecpr");
 
       function updateDiagnosisVisibility() {
         diagnosisResp.style.display = ecmoType.value === "respiratory" ? "block" : "none";
@@ -530,37 +535,57 @@
 
   <script>
   function updateEcmoDays() {
-    const startStr = document.getElementById("ecmo_start_date").value;
-    const endStr = document.getElementById("ecmo_end_date").value;
-    const display = document.getElementById("ecmo_days_display");
+    var startInput = document.getElementById("ecmo_start_date");
+    var endInput = document.getElementById("ecmo_end_date");
+    var display = document.getElementById("ecmo_days_display");
+    if (!startInput || !endInput || !display) {
+      return;
+    }
+
+    var startStr = startInput.value;
+    var endStr = endInput.value;
     if (!startStr || !endStr) {
       display.textContent = "-";
       return;
     }
-    const start = new Date(startStr);
-    const end = new Date(endStr);
+
+    var start = new Date(startStr);
+    var end = new Date(endStr);
     if (isNaN(start) || isNaN(end) || end < start) {
       display.textContent = "日付エラー";
       return;
     }
-    // 日数計算は両端含めて+1
-    const diffDays = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
+
+    var diffDays = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
     display.textContent = diffDays;
   }
-  document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById("ecmo_start_date").addEventListener("change", updateEcmoDays);
-    document.getElementById("ecmo_end_date").addEventListener("change", updateEcmoDays);
+  document.addEventListener("DOMContentLoaded", function () {
+    var startInput = document.getElementById("ecmo_start_date");
+    var endInput = document.getElementById("ecmo_end_date");
+    if (startInput) {
+      startInput.addEventListener("change", updateEcmoDays);
+    }
+    if (endInput) {
+      endInput.addEventListener("change", updateEcmoDays);
+    }
   });
 </script>
 
 <script>
   function calculateAgeAndFlags() {
-    const dob = document.getElementById("dob").value;
-    const ecmoDate = document.getElementById("ecmo_start_date").value;
-    const ageDisplay = document.getElementById("age_display");
-    const daysOldDisplay = document.getElementById("days_old_display");
-    const neonateFlag = document.getElementById("neonate_flag");
-    const pediatricFlag = document.getElementById("pediatric_flag");
+    var dobInput = document.getElementById("dob");
+    var ecmoInput = document.getElementById("ecmo_start_date");
+    var ageDisplay = document.getElementById("age_display");
+    var daysOldDisplay = document.getElementById("days_old_display");
+    var neonateFlag = document.getElementById("neonate_flag");
+    var pediatricFlag = document.getElementById("pediatric_flag");
+
+    if (!dobInput || !ecmoInput || !ageDisplay || !daysOldDisplay || !neonateFlag || !pediatricFlag) {
+      return;
+    }
+
+    var dob = dobInput.value;
+    var ecmoDate = ecmoInput.value;
 
     if (!dob || !ecmoDate) {
       ageDisplay.textContent = "（未計算）";
@@ -570,8 +595,8 @@
       return;
     }
 
-    const birth = new Date(dob);
-    const start = new Date(ecmoDate);
+    var birth = new Date(dob);
+    var start = new Date(ecmoDate);
     if (isNaN(birth) || isNaN(start) || birth > start) {
       ageDisplay.textContent = "（日付エラー）";
       daysOldDisplay.textContent = "";
@@ -580,12 +605,12 @@
       return;
     }
 
-    const diffTime = start.getTime() - birth.getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    var diffTime = start.getTime() - birth.getTime();
+    var diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-    let years = start.getFullYear() - birth.getFullYear();
-    let months = start.getMonth() - birth.getMonth();
-    let days = start.getDate() - birth.getDate();
+    var years = start.getFullYear() - birth.getFullYear();
+    var months = start.getMonth() - birth.getMonth();
+    var days = start.getDate() - birth.getDate();
     if (days < 0) {
       months -= 1;
       days += new Date(start.getFullYear(), start.getMonth(), 0).getDate();
@@ -595,15 +620,21 @@
       months += 12;
     }
 
-    ageDisplay.textContent = `${diffDays} 日齢 / ${years}歳 ${months}か月`;
+    ageDisplay.textContent = diffDays + " 日齢 / " + years + "歳 " + months + "か月";
     daysOldDisplay.textContent = diffDays;
     neonateFlag.textContent = diffDays <= 28 ? "Y" : "N";
     pediatricFlag.textContent = diffDays >= 29 ? "Y" : "N";
   }
 
-  document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById("dob").addEventListener("change", calculateAgeAndFlags);
-    document.getElementById("ecmo_start_date").addEventListener("change", calculateAgeAndFlags);
+  document.addEventListener("DOMContentLoaded", function () {
+    var dobInput = document.getElementById("dob");
+    var ecmoInput = document.getElementById("ecmo_start_date");
+    if (dobInput) {
+      dobInput.addEventListener("change", calculateAgeAndFlags);
+    }
+    if (ecmoInput) {
+      ecmoInput.addEventListener("change", calculateAgeAndFlags);
+    }
   });
 </script>
 
@@ -648,107 +679,148 @@
 
   <script>
     window.readFileAsBase64 = function readFileAsBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result;
+      return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function () {
+          var result = reader.result;
           if (typeof result === "string") {
-            const commaIndex = result.indexOf(",");
+            var commaIndex = result.indexOf(",");
             resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result);
           } else {
             reject(new Error("ファイルの読み込みに失敗しました"));
           }
         };
-        reader.onerror = () => reject(new Error("ファイルの読み込みに失敗しました"));
+        reader.onerror = function () {
+          reject(new Error("ファイルの読み込みに失敗しました"));
+        };
         reader.readAsDataURL(file);
       });
     };
 
-    window.downloadExcel = function downloadExcel() {
-      // 必要な値取得は元スクリプト通りでOK
-      const hospitalEl = document.getElementById("hospital");
-      const selectedHospitalText = hospitalEl.selectedOptions[0].text;
-      const region = window.regionMap[selectedHospitalText] || "不明";
+    function getElementValue(id) {
+      var element = document.getElementById(id);
+      return element ? element.value : "";
+    }
 
-      const dob = new Date(document.getElementById("dob").value);
-      const ecmoStart = new Date(document.getElementById("ecmo_start_date").value);
-      let daysOld = "", monthsOld = "", yearsOld = "", neonateFlag = "";
+    function getTextContent(id) {
+      var element = document.getElementById(id);
+      return element ? element.textContent : "";
+    }
+
+    function getCheckedValues(name) {
+      var nodes = document.querySelectorAll('input[name="' + name + '"]:checked');
+      var values = [];
+      for (var i = 0; i < nodes.length; i += 1) {
+        values.push(nodes[i].value);
+      }
+      return values;
+    }
+
+    window.downloadExcel = function downloadExcel() {
+      var hospitalEl = document.getElementById("hospital");
+      if (!hospitalEl || hospitalEl.selectedIndex < 0) {
+        alert("病院が選択されていません");
+        return;
+      }
+
+      var selectedHospitalText = hospitalEl.options[hospitalEl.selectedIndex].text;
+      var region = window.regionMap[selectedHospitalText] || "不明";
+
+      var dobValue = getElementValue("dob");
+      var ecmoStartValue = getElementValue("ecmo_start_date");
+      var dob = dobValue ? new Date(dobValue) : new Date("invalid");
+      var ecmoStart = ecmoStartValue ? new Date(ecmoStartValue) : new Date("invalid");
+      var daysOld = "";
+      var monthsOld = "";
+      var yearsOld = "";
+      var neonateFlag = "";
       if (!isNaN(dob) && !isNaN(ecmoStart)) {
-        const diffMs = ecmoStart - dob;
-        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-        const diffMonths = Math.floor(diffDays / 30.4375);
-        const diffYears = Math.floor(diffDays / 365.25);
+        var diffMs = ecmoStart - dob;
+        var diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        var diffMonths = Math.floor(diffDays / 30.4375);
+        var diffYears = Math.floor(diffDays / 365.25);
         daysOld = diffDays;
         monthsOld = diffMonths;
         yearsOld = diffYears;
         neonateFlag = diffDays <= 28 ? "Y" : "N";
       }
 
-      const ecmoType = document.getElementById("ecmo_type")?.value || "";
+      var ecmoTypeEl = document.getElementById("ecmo_type");
+      var ecmoType = ecmoTypeEl ? ecmoTypeEl.value : "";
 
-      const record = {
+      var record = {
         region: region,
         hospital: selectedHospitalText,
-        id: document.getElementById("case_id").value,
-        sex: document.getElementById("sex").value,
-        birth_date: document.getElementById("dob").value,
-        weight: document.getElementById("weight").value,
+        id: getElementValue("case_id"),
+        sex: getElementValue("sex"),
+        birth_date: dobValue,
+        weight: getElementValue("weight"),
         days_old: daysOld,
         months_old: monthsOld,
         years_old: yearsOld,
         neonate_flag: neonateFlag,
         ecmo_type: ecmoType,
-        ecmo_24h_survival: document.getElementById("ecmo_24h_survival")?.value || "",
-        ecmo_off_reasons: Array.from(document.querySelectorAll('input[name="ecmo_off_reason"]:checked')).map(cb => cb.value).join(", ") || "",
-        ...(ecmoType === "ecpr" && {
-          ecpr_icd10_code: document.getElementById("ecpr_icd10_code")?.value || "",
-          arrest_location: document.getElementById("arrest_location")?.value || "",
-          witnessed: document.getElementById("witnessed")?.value || "",
-          cannulation_location: document.getElementById("cannulation_location")?.value || "",
-          priming_fluid: document.getElementById("priming_fluid")?.value || "",
-          hypothermia: document.getElementById("hypothermia")?.value || "",
-          cpr_duration_min: document.getElementById("cpr_duration")?.value || ""
-        }),
-        ecmo_mode: document.getElementById("ecmo_mode").value,
-        pump_type: document.getElementById("pump_type").value,
-        oxygenator_type: document.getElementById("oxygenator").value,
-        ecmo_start_date: document.getElementById("ecmo_start_date").value,
-        ecmo_end_date: document.getElementById("ecmo_end_date").value,
-        ecmo_days: document.getElementById("ecmo_days_display").textContent,
-        anticoagulants: Array.from(document.querySelectorAll('input[name="anticoagulants"]:checked')).map(cb => cb.value).join(", ") || "",
-        anticoag_monitoring: Array.from(document.querySelectorAll('input[name="anticoag_monitoring"]:checked')).map(cb => cb.value).join(", ") || "",
-        icu_survival: document.getElementById("icu_survival").value,
-        icu_discharge: document.getElementById("icu_discharge_date").value,
-        hospital_survival: document.getElementById("hospital_survival").value,
-        hospital_discharge: document.getElementById("hospital_discharge_date").value
+        ecmo_24h_survival: getElementValue("ecmo_24h_survival"),
+        ecmo_off_reasons: getCheckedValues("ecmo_off_reason").join(", "),
+        ecmo_mode: getElementValue("ecmo_mode"),
+        pump_type: getElementValue("pump_type"),
+        oxygenator_type: getElementValue("oxygenator"),
+        ecmo_start_date: ecmoStartValue,
+        ecmo_end_date: getElementValue("ecmo_end_date"),
+        ecmo_days: getTextContent("ecmo_days_display"),
+        anticoagulants: getCheckedValues("anticoagulants").join(", "),
+        anticoag_monitoring: getCheckedValues("anticoag_monitoring").join(", "),
+        icu_survival: getElementValue("icu_survival"),
+        icu_discharge: getElementValue("icu_discharge_date"),
+        hospital_survival: getElementValue("hospital_survival"),
+        hospital_discharge: getElementValue("hospital_discharge_date")
       };
 
-      // 合併症
-      const complicationMap = {
-        oxygenator_failure: 'oxygenator_fail',
-        pump_failure: 'pump_fail',
-        cannula_problem: 'cannula_problem',
-        air_embolism: 'air_embolism',
-        seizure: 'seizure',
-        stroke: 'stroke',
-        ich_ct: 'ich_ct',
-        ich_echo: 'ich_echo',
-        brain_death: 'brain_death',
-        tamponade: 'tamponade',
-        cannula_bleeding: 'cannula_bleeding',
-        gi_bleed: 'gi_bleed',
-        amputation: 'amputation'
+      if (ecmoType === "ecpr") {
+        record.ecpr_icd10_code = getElementValue("ecpr_icd10_code");
+        record.arrest_location = getElementValue("arrest_location");
+        record.witnessed = getElementValue("witnessed");
+        record.cannulation_location = getElementValue("cannulation_location");
+        record.priming_fluid = getElementValue("priming_fluid");
+        record.hypothermia = getElementValue("hypothermia");
+        record.cpr_duration_min = getElementValue("cpr_duration");
+      }
+
+      var complicationMap = {
+        oxygenator_failure: "oxygenator_fail",
+        pump_failure: "pump_fail",
+        cannula_problem: "cannula_problem",
+        air_embolism: "air_embolism",
+        seizure: "seizure",
+        stroke: "stroke",
+        ich_ct: "ich_ct",
+        ich_echo: "ich_echo",
+        brain_death: "brain_death",
+        tamponade: "tamponade",
+        cannula_bleeding: "cannula_bleeding",
+        gi_bleed: "gi_bleed",
+        amputation: "amputation"
       };
-      Object.entries(complicationMap).forEach(([id, shortKey]) => {
-        record[shortKey] = document.getElementById(id)?.value || "";
-        record[`${shortKey}_date`] = document.getElementById(id + "_date")?.value || "";
-      });
 
-      const headers = Object.keys(record);
-      const values = Object.values(record);
+      for (var complicationId in complicationMap) {
+        if (Object.prototype.hasOwnProperty.call(complicationMap, complicationId)) {
+          var shortKey = complicationMap[complicationId];
+          record[shortKey] = getElementValue(complicationId);
+          record[shortKey + "_date"] = getElementValue(complicationId + "_date");
+        }
+      }
 
-      const ws = XLSX.utils.aoa_to_sheet([headers, values]);
-      const wb = XLSX.utils.book_new();
+      var checkedCodes = getCheckedValues("icd10_codes");
+      record.icd10_codes = checkedCodes;
+
+      var headers = Object.keys(record);
+      var values = [];
+      for (var h = 0; h < headers.length; h += 1) {
+        values.push(record[headers[h]]);
+      }
+
+      var ws = XLSX.utils.aoa_to_sheet([headers, values]);
+      var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "ECMO_data");
       XLSX.writeFile(wb, "ecmo_registry.xlsx");
     };
@@ -756,18 +828,19 @@
 
   <script>
     (function initialiseDeleteRequestForm() {
-      const deleteRequestButton = document.getElementById("deleteRequestButton");
+      var deleteRequestButton = document.getElementById("deleteRequestButton");
       if (!deleteRequestButton) {
         return;
       }
 
-      const statusElement = document.getElementById("deleteRequestStatus");
+      var statusElement = document.getElementById("deleteRequestStatus");
 
-      const setStatus = (message, type = "info") => {
+      function setStatus(message, type) {
         if (!statusElement) {
           return;
         }
 
+        var statusType = type || "info";
         statusElement.textContent = message;
         statusElement.classList.remove(
           "delete-request-status--info",
@@ -775,150 +848,215 @@
           "delete-request-status--error"
         );
 
-        const className =
-          type === "error"
-            ? "delete-request-status--error"
-            : type === "warn"
-            ? "delete-request-status--warn"
-            : "delete-request-status--info";
+        var className = "delete-request-status--info";
+        if (statusType === "error") {
+          className = "delete-request-status--error";
+        } else if (statusType === "warn") {
+          className = "delete-request-status--warn";
+        }
         statusElement.classList.add(className);
-      };
+      }
 
-      const resolveEndpoint = () => {
-        const endpointFromWindow =
+      function resolveEndpoint() {
+        var endpointFromWindow =
           typeof window.DELETE_REQUEST_ENDPOINT === "string"
-            ? window.DELETE_REQUEST_ENDPOINT.trim()
+            ? window.DELETE_REQUEST_ENDPOINT.replace(/^\s+|\s+$/g, "")
             : "";
-        const endpointFromAttribute =
+        var endpointFromAttribute =
           deleteRequestButton.getAttribute("data-delete-request-endpoint") || "";
-        return endpointFromWindow || endpointFromAttribute.trim();
-      };
+        endpointFromAttribute = endpointFromAttribute.replace(/^\s+|\s+$/g, "");
+        return endpointFromWindow || endpointFromAttribute;
+      }
 
-      const initialMessages = [];
-      let initialStatusType = "info";
-
+      var initialMessages = [];
+      var initialStatusType = "info";
       if (!resolveEndpoint()) {
-        const message =
+        var missingMessage =
           "削除依頼メールの送信先URLが設定されていません。window.DELETE_REQUEST_ENDPOINT か data-delete-request-endpoint で設定してください。";
-        initialMessages.push(message);
+        initialMessages.push(missingMessage);
         initialStatusType = "error";
-        console.warn(message);
+        if (typeof console !== "undefined" && console.warn) {
+          console.warn(missingMessage);
+        }
       } else {
         initialMessages.push("削除依頼メールの送信先URLは設定済みです。");
       }
 
-      if (location.protocol === "file:") {
-        const fileWarning =
+      if (typeof location !== "undefined" && location.protocol === "file:") {
+        var fileWarning =
           "ローカルファイル（file://）から開いているため、動作しない場合は開発サーバー経由でアクセスしてください。";
         initialMessages.push(fileWarning);
         if (initialStatusType !== "error") {
           initialStatusType = "warn";
         }
-        console.warn(
-          "ローカルファイル（file://）から開いているため、ブラウザによっては Firebase SDK やモジュールが読み込めません。開発サーバーや Firebase Hosting からアクセスしてください。"
-        );
+        if (typeof console !== "undefined" && console.warn) {
+          console.warn(
+            "ローカルファイル（file://）から開いているため、ブラウザによっては Firebase SDK やモジュールが読み込めません。開発サーバーや Firebase Hosting からアクセスしてください。"
+          );
+        }
       }
 
-      setStatus(initialMessages.join("\n"), initialStatusType);
+      if (initialMessages.length > 0) {
+        setStatus(initialMessages.join("\n"), initialStatusType);
+      }
 
-      deleteRequestButton.addEventListener("click", async () => {
-        const deleteRequestEndpoint = resolveEndpoint();
-        const facility =
-          document.getElementById("delete_facility")?.value.trim() || "";
-        const recordId =
-          document.getElementById("delete_record_id")?.value.trim() || "";
-        const recordDate =
-          document.getElementById("delete_record_date")?.value || "";
-        const note =
-          document.getElementById("delete_note")?.value.trim() || "";
-        const attachmentFile =
-          document.getElementById("delete_attachment")?.files?.[0];
+      if (typeof Promise !== "function") {
+        setStatus("ご利用のブラウザでは削除依頼機能を使用できません。最新のブラウザでお試しください。", "error");
+        return;
+      }
+
+      function getTrimmedValue(id) {
+        var element = document.getElementById(id);
+        if (!element || typeof element.value !== "string") {
+          return "";
+        }
+        return element.value.replace(/^\s+|\s+$/g, "");
+      }
+
+      function clearValue(id) {
+        var element = document.getElementById(id);
+        if (element) {
+          element.value = "";
+        }
+      }
+
+      function handleAttachment(attachmentFile) {
+        if (!attachmentFile) {
+          return Promise.resolve(null);
+        }
+        if (typeof window.readFileAsBase64 !== "function") {
+          return Promise.reject(new Error("添付ファイルを処理できませんでした。"));
+        }
+        return window.readFileAsBase64(attachmentFile).then(function (base64Content) {
+          return {
+            content: base64Content,
+            filename: attachmentFile.name,
+            type: attachmentFile.type || "application/octet-stream"
+          };
+        });
+      }
+
+      function sendRequest(endpoint, payload) {
+        if (typeof window.fetch === "function") {
+          return window.fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+        }
+
+        return new Promise(function (resolve, reject) {
+          var xhr = new XMLHttpRequest();
+          xhr.open("POST", endpoint, true);
+          xhr.setRequestHeader("Content-Type", "application/json");
+          xhr.onreadystatechange = function () {
+            if (xhr.readyState === 4) {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                resolve({
+                  ok: true,
+                  status: xhr.status,
+                  json: function () {
+                    try {
+                      return Promise.resolve(JSON.parse(xhr.responseText || "{}"));
+                    } catch (parseError) {
+                      return Promise.resolve({});
+                    }
+                  }
+                });
+              } else {
+                reject(new Error("HTTP " + xhr.status));
+              }
+            }
+          };
+          xhr.onerror = function () {
+            reject(new Error("ネットワークエラー"));
+          };
+          xhr.send(JSON.stringify(payload));
+        });
+      }
+
+      deleteRequestButton.addEventListener("click", function () {
+        var deleteRequestEndpoint = resolveEndpoint();
+        var facility = getTrimmedValue("delete_facility");
+        var recordId = getTrimmedValue("delete_record_id");
+        var recordDateElement = document.getElementById("delete_record_date");
+        var recordDate = recordDateElement ? recordDateElement.value : "";
+        var note = getTrimmedValue("delete_note");
+        var attachmentInput = document.getElementById("delete_attachment");
+        var attachmentFile = attachmentInput && attachmentInput.files ? attachmentInput.files[0] : null;
 
         if (!facility) {
-          const message = "施設名を入力してください。";
-          setStatus(message, "error");
-          alert(message);
+          var facilityMessage = "施設名を入力してください。";
+          setStatus(facilityMessage, "error");
+          alert(facilityMessage);
           return;
         }
 
         if (!recordId && !recordDate) {
-          const message = "削除依頼IDまたは入力日付のいずれかを入力してください。";
-          setStatus(message, "error");
-          alert(message);
+          var idMessage = "削除依頼IDまたは入力日付のいずれかを入力してください。";
+          setStatus(idMessage, "error");
+          alert(idMessage);
           return;
         }
 
-        let attachmentPayload = null;
-        if (attachmentFile) {
-          try {
-            const base64Content = await window.readFileAsBase64(attachmentFile);
-            attachmentPayload = {
-              content: base64Content,
-              filename: attachmentFile.name,
-              type: attachmentFile.type || "application/octet-stream"
-            };
-          } catch (error) {
-            setStatus(error.message, "error");
-            alert(error.message);
-            return;
-          }
-        }
-
-        const originalText = deleteRequestButton.textContent;
+        var originalText = deleteRequestButton.textContent;
         deleteRequestButton.disabled = true;
         deleteRequestButton.textContent = "送信中...";
 
-        try {
-          if (!deleteRequestEndpoint) {
-            const message =
-              "削除依頼メール送信先の URL が設定されていません。ボタン横の案内を参照して設定してください。";
-            setStatus(message, "error");
-            throw new Error(
-              "削除依頼メール送信先の URL が設定されていません。"
-            );
-          }
-
-          setStatus("削除依頼メールを送信中です…", "warn");
-
-          const response = await fetch(deleteRequestEndpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              facility,
-              recordId,
-              recordDate,
-              note,
-              attachment: attachmentPayload
-            })
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => null);
-            const message = errorData?.error || `HTTP ${response.status}`;
-            throw new Error(message);
-          }
-
-          setStatus("送信が完了しました。ありがとうございました。", "info");
-          alert("送信が完了しました。ありがとうございました。");
-          document.getElementById("delete_facility")?.value = "";
-          document.getElementById("delete_record_id")?.value = "";
-          document.getElementById("delete_record_date")?.value = "";
-          document.getElementById("delete_note")?.value = "";
-          const attachmentInput = document.getElementById("delete_attachment");
-          if (attachmentInput) {
-            attachmentInput.value = "";
-          }
-        } catch (error) {
-          console.error("SendGrid error", error);
-          setStatus(
-            `❌ メールの送信に失敗しました: ${error.message}`,
-            "error"
-          );
-          alert(`❌ メールの送信に失敗しました: ${error.message}`);
-        } finally {
+        function restoreButton() {
           deleteRequestButton.disabled = false;
           deleteRequestButton.textContent = originalText;
         }
+
+        handleAttachment(attachmentFile)
+          .then(function (attachmentPayload) {
+            if (!deleteRequestEndpoint) {
+              var message =
+                "削除依頼メール送信先の URL が設定されていません。ボタン横の案内を参照して設定してください。";
+              setStatus(message, "error");
+              throw new Error("削除依頼メール送信先の URL が設定されていません。");
+            }
+
+            setStatus("削除依頼メールを送信中です…", "warn");
+
+            var payload = {
+              facility: facility,
+              recordId: recordId,
+              recordDate: recordDate,
+              note: note,
+              attachment: attachmentPayload
+            };
+            return sendRequest(deleteRequestEndpoint, payload);
+          })
+          .then(function (response) {
+            if (!response.ok) {
+              return response.json().then(function (errorData) {
+                var errorMessage = errorData && errorData.error ? errorData.error : "HTTP " + response.status;
+                throw new Error(errorMessage);
+              });
+            }
+
+            setStatus("送信が完了しました。ありがとうございました。", "info");
+            alert("送信が完了しました。ありがとうございました。");
+            clearValue("delete_facility");
+            clearValue("delete_record_id");
+            clearValue("delete_record_date");
+            clearValue("delete_note");
+            if (attachmentInput) {
+              attachmentInput.value = "";
+            }
+          })
+          .catch(function (error) {
+            if (typeof console !== "undefined" && console.error) {
+              console.error("SendGrid error", error);
+            }
+            var errorMessage = "❌ メールの送信に失敗しました: " + error.message;
+            setStatus(errorMessage, "error");
+            alert(errorMessage);
+          })
+          .then(function () {
+            restoreButton();
+          });
       });
     })();
   </script>
