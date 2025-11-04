@@ -43,7 +43,12 @@ function applyCors(req, res) {
     res.set("Vary", "Origin");
   }
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Content-Type");
+  const requestedHeaders = req.headers["access-control-request-headers"];
+  if (requestedHeaders) {
+    res.set("Access-Control-Allow-Headers", requestedHeaders);
+  } else {
+    res.set("Access-Control-Allow-Headers", "Content-Type");
+  }
 }
 
 exports.sendDeleteRequest = functions
