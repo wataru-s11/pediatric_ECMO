@@ -868,9 +868,49 @@
         return endpointFromWindow || endpointFromAttribute;
       }
 
+      function resolveReprocessEndpoint() {
+        var override =
+          typeof window.DELETE_REQUEST_REPROCESS_ENDPOINT === "string"
+            ? window.DELETE_REQUEST_REPROCESS_ENDPOINT.replace(/^\s+|\s+$/g, "")
+            : "";
+        if (override) {
+          return override;
+        }
+
+        var endpoint = resolveEndpoint();
+        if (!endpoint) {
+          return "";
+        }
+
+        if (typeof URL === "function") {
+          try {
+            var parsed = new URL(endpoint);
+            var segments = parsed.pathname.split("/");
+            if (segments.length > 1) {
+              segments[segments.length - 1] = "reprocessDeleteRequest";
+              parsed.pathname = segments.join("/");
+              return parsed.toString();
+            }
+          } catch (parseError) {
+            if (typeof console !== "undefined" && console.warn) {
+              console.warn("Failed to derive reprocess endpoint via URL", parseError);
+            }
+          }
+        }
+
+        if (endpoint.indexOf("/") === -1) {
+          return endpoint;
+        }
+
+        return endpoint.replace(/\/?[^/]*$/, "/reprocessDeleteRequest");
+      }
+
       var initialMessages = [];
       var initialStatusType = "info";
-      if (!resolveEndpoint()) {
+      var configuredEndpoint = resolveEndpoint();
+      var reprocessEndpoint = resolveReprocessEndpoint();
+
+      if (!configuredEndpoint) {
         var missingMessage =
           "削除依頼メールの送信先URLが設定されていません。window.DELETE_REQUEST_ENDPOINT か data-delete-request-endpoint で設定してください。";
         initialMessages.push(missingMessage);
@@ -880,6 +920,10 @@
         }
       } else {
         initialMessages.push("削除依頼メールの送信先URLは設定済みです。");
+      }
+
+      if (reprocessEndpoint) {
+        initialMessages.push("削除依頼のバックグラウンド処理用エンドポイントを確認しました。");
       }
 
       if (typeof location !== "undefined" && location.protocol === "file:") {
@@ -986,6 +1030,113 @@
         });
       }
 
+      function formatTimestamp(timestampLike) {
+        if (!timestampLike) {
+          return "";
+        }
+
+        try {
+          if (typeof timestampLike.toDate === "function") {
+            return timestampLike.toDate().toLocaleString("ja-JP");
+          }
+
+          if (
+            typeof timestampLike.seconds === "number" &&
+            typeof timestampLike.nanoseconds === "number"
+          ) {
+            var millis = timestampLike.seconds * 1000 + Math.floor(timestampLike.nanoseconds / 1000000);
+            return new Date(millis).toLocaleString("ja-JP");
+          }
+        } catch (timestampError) {
+          if (typeof console !== "undefined" && console.warn) {
+            console.warn("Failed to format Firestore timestamp", timestampError);
+          }
+        }
+
+        if (typeof timestampLike === "string") {
+          return timestampLike;
+        }
+
+        return "";
+      }
+
+      function buildAttemptContext(statusData) {
+        if (!statusData || typeof statusData !== "object") {
+          return "";
+        }
+
+        var lines = [];
+        if (typeof statusData.attemptCount === "number") {
+          lines.push("試行回数: " + statusData.attemptCount);
+        }
+        if (statusData.lastAttemptAt) {
+          var lastAttempt = formatTimestamp(statusData.lastAttemptAt);
+          if (lastAttempt) {
+            lines.push("最終試行: " + lastAttempt);
+          }
+        }
+        if (statusData.processingStartedAt) {
+          var startedAt = formatTimestamp(statusData.processingStartedAt);
+          if (startedAt) {
+            lines.push("処理開始: " + startedAt);
+          }
+        }
+        if (statusData.processedAt) {
+          var processedAt = formatTimestamp(statusData.processedAt);
+          if (processedAt) {
+            lines.push("処理完了: " + processedAt);
+          }
+        }
+
+        return lines.length > 0 ? "\n" + lines.join("\n") : "";
+      }
+
+      async function triggerDeleteRequestProcessing(docId) {
+        if (!docId || !reprocessEndpoint) {
+          return;
+        }
+
+        try {
+          var triggerResponse = await sendRequest(reprocessEndpoint, {
+            docId: docId
+          });
+
+          if (!triggerResponse || typeof triggerResponse.ok !== "boolean") {
+            return;
+          }
+
+          if (!triggerResponse.ok) {
+            if (typeof console !== "undefined" && console.warn) {
+              console.warn("Failed to trigger delete request reprocessing", triggerResponse.status);
+            }
+            return;
+          }
+
+          if (typeof triggerResponse.json === "function") {
+            triggerResponse
+              .json()
+              .then(function (triggerData) {
+                if (
+                  triggerData &&
+                  typeof triggerData === "object" &&
+                  typeof triggerData.status === "string" &&
+                  typeof console !== "undefined" &&
+                  console.info
+                ) {
+                  console.info("Delete request reprocess response", triggerData);
+                }
+              })
+              .catch(function () {
+                /* ignore JSON parse errors */
+              });
+          }
+        } catch (triggerError) {
+          if (typeof console !== "undefined" && console.warn) {
+            console.warn("Unable to trigger delete request reprocessing", triggerError);
+          }
+        }
+      }
+
       async function attemptFirestoreFallback(payload, originalError) {
         var outcome = { attempted: false, success: false, errorMessage: null };
 
@@ -1032,29 +1183,32 @@
             ? "\n初回エラー: " + originalErrorMessage
             : "";
 
-          function notifyCompletion() {
+          function notifyCompletion(statusData) {
             var completionMessage =
               "送信処理が完了しました。ありがとうございました。" + initialFailureInfo;
             completionMessage = appendDocReference(completionMessage);
+            completionMessage += buildAttemptContext(statusData);
             setStatus(completionMessage, "info");
             alert(completionMessage);
           }
 
-          function notifyError(message) {
+          function notifyError(message, statusData) {
             var finalMessage = message || "Firestore 経由の送信処理に失敗しました。";
             if (initialFailureInfo) {
               finalMessage += initialFailureInfo;
             }
             finalMessage = appendDocReference(finalMessage);
+            finalMessage += buildAttemptContext(statusData);
             setStatus("❌ " + finalMessage, "error");
             alert("❌ " + finalMessage);
           }
 
-          function notifyTimeout() {
+          function notifyTimeout(statusData) {
             var timeoutMessage =
               "送信処理の確認がタイムアウトしました。しばらくしてからメール受信箱をご確認ください。" +
               initialFailureInfo;
             timeoutMessage = appendDocReference(timeoutMessage);
+            timeoutMessage += buildAttemptContext(statusData);
             setStatus(timeoutMessage, "warn");
             alert(timeoutMessage);
           }
@@ -1084,6 +1238,7 @@
             var unsubscribe = null;
             var hasFinalised = false;
             var timeoutId = null;
+            var latestStatusData = null;
 
             function finalise(callback) {
               if (hasFinalised) {
@@ -1098,34 +1253,36 @@
                 unsubscribe();
                 unsubscribe = null;
               }
-              callback();
+              callback(latestStatusData);
             }
 
             unsubscribe = window.watchDeleteRequestStatus(
               docId,
               function onUpdate(statusData) {
+                latestStatusData = statusData || null;
                 if (!statusData) {
-                  finalise(function () {
-                    notifyError("削除依頼のステータスを取得できませんでした。");
+                  finalise(function (finalStatus) {
+                    notifyError("削除依頼のステータスを取得できませんでした。", finalStatus);
                   });
                   return;
                 }
 
                 var currentStatus = statusData.status || "";
                 if (currentStatus === "sent") {
-                  finalise(function () {
-                    notifyCompletion();
+                  finalise(function (finalStatus) {
+                    notifyCompletion(finalStatus);
                   });
                 } else if (currentStatus === "error") {
                   var statusErrorMessage =
                     statusData.errorMessage && typeof statusData.errorMessage === "string"
                       ? statusData.errorMessage.trim()
                       : "";
-                  finalise(function () {
+                  finalise(function (finalStatus) {
                     notifyError(
                       statusErrorMessage
                         ? "メール送信に失敗しました: " + statusErrorMessage
-                        : "メール送信に失敗しました。詳細は管理者にお問い合わせください。"
+                        : "メール送信に失敗しました。詳細は管理者にお問い合わせください。",
+                      finalStatus
                     );
                   });
                 } else {
@@ -1141,6 +1298,7 @@
                   if (statusData.errorMessage && statusData.errorMessage !== statusData.lastError) {
                     progressMessage += "\n最新エラー: " + statusData.errorMessage;
                   }
+                  progressMessage += buildAttemptContext(statusData);
                   progressMessage = appendDocReference(progressMessage);
                   setStatus(progressMessage, "warn");
                 }
@@ -1150,18 +1308,21 @@
                   listenerError && typeof listenerError.message === "string"
                     ? listenerError.message
                     : "削除依頼のステータス監視中にエラーが発生しました。";
-                finalise(function () {
-                  notifyError(listenerMessage);
+                finalise(function (finalStatus) {
+                  notifyError(listenerMessage, finalStatus);
                 });
               }
             );
 
+            triggerDeleteRequestProcessing(docId);
+
             timeoutId = setTimeout(function () {
-              finalise(function () {
-                notifyTimeout();
+              finalise(function (finalStatus) {
+                notifyTimeout(finalStatus);
               });
             }, 5 * 60 * 1000);
           } else {
+            triggerDeleteRequestProcessing(docId);
             notifyQueuedWithoutWatcher();
           }
 
@@ -1302,6 +1463,94 @@ const firebaseConfig = {
 };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+
+window.submitDeleteRequestViaFirestore = async function submitDeleteRequestViaFirestore(
+  payload,
+  options
+) {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("削除依頼の内容が不正です。");
+  }
+
+  var failureReason = "";
+  if (options && typeof options.failureReason === "string") {
+    failureReason = options.failureReason.trim();
+  }
+
+  const trimValue = value => (typeof value === "string" ? value.trim() : "");
+  const facility = trimValue(payload.facility);
+  const recordId = trimValue(payload.recordId);
+  const recordDate = trimValue(payload.recordDate);
+  const note = typeof payload.note === "string" ? payload.note : "";
+
+  if (!facility) {
+    throw new Error("施設名は必須です。");
+  }
+
+  if (!recordId && !recordDate) {
+    throw new Error("削除依頼IDまたは入力日付のいずれかを入力してください。");
+  }
+
+  let attachment = null;
+  if (payload.attachment && payload.attachment.content) {
+    attachment = {
+      content: String(payload.attachment.content),
+      filename: payload.attachment.filename ? String(payload.attachment.filename) : "attachment",
+      type: payload.attachment.type ? String(payload.attachment.type) : "application/octet-stream"
+    };
+
+    var approximateBytes = Math.ceil((attachment.content.length * 3) / 4);
+    if (approximateBytes > 900000) {
+      throw new Error("添付ファイルが大きすぎます。1MB未満のファイルをご利用ください。");
+    }
+  }
+
+  const docPayload = {
+    facility,
+    recordId,
+    recordDate,
+    note,
+    attachment,
+    status: "pending",
+    submittedAt: new Date().toISOString(),
+    lastError: failureReason || null
+  };
+
+  const docRef = await addDoc(collection(db, "delete_requests"), docPayload);
+  return { docId: docRef.id };
+};
+
+window.watchDeleteRequestStatus = function watchDeleteRequestStatus(
+  docId,
+  onUpdate,
+  onError
+) {
+  if (!docId) {
+    return function noop() {};
+  }
+
+  try {
+    const documentRef = doc(db, "delete_requests", docId);
+    return onSnapshot(
+      documentRef,
+      snapshot => {
+        if (typeof onUpdate === "function") {
+          onUpdate(snapshot.exists() ? snapshot.data() : null);
+        }
+      },
+      error => {
+        if (typeof onError === "function") {
+          onError(error);
+        }
+      }
+    );
+  } catch (listenerError) {
+    if (typeof onError === "function") {
+      onError(listenerError);
+    }
+    return function noop() {};
+  }
+};
 
 window.submitDeleteRequestViaFirestore = async function submitDeleteRequestViaFirestore(
   payload,

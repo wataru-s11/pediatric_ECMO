@@ -113,6 +113,98 @@ async function sendDeleteRequestEmail(payload) {
   return sanitized;
 }
 
+async function annotateMetadata(docRef, requestData) {
+  const metadataUpdate = {
+    lastAttemptAt: FieldValue.serverTimestamp(),
+    attemptCount: FieldValue.increment(1)
+  };
+
+  if (!requestData.firstQueuedAt) {
+    metadataUpdate.firstQueuedAt = FieldValue.serverTimestamp();
+  }
+
+  await docRef.set(metadataUpdate, { merge: true });
+}
+
+async function markRequestError(docRef, messageText) {
+  await docRef.update({
+    status: "error",
+    errorMessage: messageText,
+    lastError: messageText,
+    processedAt: FieldValue.serverTimestamp()
+  });
+}
+
+async function markRequestSent(docRef) {
+  await docRef.update({
+    status: "sent",
+    processedAt: FieldValue.serverTimestamp(),
+    lastError: null,
+    errorMessage: FieldValue.delete()
+  });
+}
+
+async function markRequestProcessing(docRef) {
+  await docRef.update({
+    status: "processing",
+    processingStartedAt: FieldValue.serverTimestamp(),
+    errorMessage: FieldValue.delete()
+  });
+}
+
+async function processDeleteRequestSnapshot(snapshot, options = {}) {
+  const requestData = snapshot.data() || {};
+  const docRef = snapshot.ref;
+
+  try {
+    await annotateMetadata(docRef, requestData);
+  } catch (metadataError) {
+    console.error("Failed to annotate delete request metadata", metadataError);
+  }
+
+  if (!SENDGRID_KEY) {
+    const messageText = "SendGrid API key is not configured.";
+    await markRequestError(docRef, messageText);
+    return { status: "error", error: messageText };
+  }
+
+  if (!SENDGRID_FROM || !SENDGRID_TO) {
+    const messageText = "SendGrid sender/recipient is not configured.";
+    await markRequestError(docRef, messageText);
+    return { status: "error", error: messageText };
+  }
+
+  const currentStatus = requestData.status;
+  if (
+    !options.force &&
+    typeof currentStatus === "string" &&
+    currentStatus.toLowerCase() === "sent"
+  ) {
+    return { status: "sent", skipped: true };
+  }
+
+  let sanitizedPayload;
+  try {
+    sanitizedPayload = sanitizeDeleteRequestPayload(requestData);
+  } catch (validationError) {
+    const messageText = validationError.message;
+    await markRequestError(docRef, messageText);
+    return { status: "error", error: messageText };
+  }
+
+  try {
+    await markRequestProcessing(docRef);
+    await sendDeleteRequestEmail(sanitizedPayload);
+    await markRequestSent(docRef);
+    return { status: "sent" };
+  } catch (error) {
+    console.error("SendGrid error", error);
+    const messageText = extractSendgridError(error);
+    await markRequestError(docRef, messageText);
+    return { status: "error", error: messageText };
+  }
+}
+
 function extractSendgridError(error) {
   return (
     (error.response &&
@@ -191,77 +283,66 @@ exports.processDeleteRequest = functions
   .region("asia-northeast1")
   .firestore.document("delete_requests/{requestId}")
   .onCreate(async snapshot => {
-    const requestData = snapshot.data() || {};
+    await processDeleteRequestSnapshot(snapshot, { force: false });
+  });
 
-    try {
-      const metadataUpdate = {
-        lastAttemptAt: FieldValue.serverTimestamp(),
-        attemptCount: FieldValue.increment(1)
-      };
+exports.reprocessDeleteRequest = functions
+  .region("asia-northeast1")
+  .https.onRequest(async (req, res) => {
+    applyCors(req, res);
 
-      if (!requestData.firstQueuedAt) {
-        metadataUpdate.firstQueuedAt = FieldValue.serverTimestamp();
-      }
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+  });
 
-      await snapshot.ref.set(metadataUpdate, { merge: true });
-    } catch (metadataError) {
-      console.error("Failed to annotate delete request metadata", metadataError);
+    if (req.method !== "POST") {
+      res.set("Allow", "POST");
+      res.status(405).json({ error: "Method not allowed" });
+      return;
     }
 
     if (!SENDGRID_KEY) {
-      await snapshot.ref.update({
-        status: "error",
-        errorMessage: "SendGrid API key is not configured.",
-        lastError: "SendGrid API key is not configured.",
-        processedAt: FieldValue.serverTimestamp()
-      });
+      res.status(500).json({ error: "SendGrid API key is not configured." });
       return;
     }
 
-    if (!SENDGRID_FROM || !SENDGRID_TO) {
-      await snapshot.ref.update({
-        status: "error",
-        errorMessage: "SendGrid sender/recipient is not configured.",
-        lastError: "SendGrid sender/recipient is not configured.",
-        processedAt: FieldValue.serverTimestamp()
-      });
-      return;
+    let requestBody = req.body;
+
+    if (typeof requestBody === "string") {
+      try {
+        requestBody = JSON.parse(requestBody);
+      } catch (parseError) {
+        console.warn("Failed to parse request body as JSON", parseError);
+      }
     }
 
-    let sanitizedPayload;
-    try {
-      sanitizedPayload = sanitizeDeleteRequestPayload(requestData);
-    } catch (validationError) {
-      await snapshot.ref.update({
-        status: "error",
-        errorMessage: validationError.message,
-        lastError: validationError.message,
-        processedAt: FieldValue.serverTimestamp()
-      });
+    const docId =
+      requestBody && typeof requestBody.docId === "string"
+        ? requestBody.docId.trim()
+        : "";
+
+    if (!docId) {
+      res.status(400).json({ error: "Missing docId" });
       return;
     }
 
     try {
-      await snapshot.ref.update({
-        status: "processing",
-        processingStartedAt: FieldValue.serverTimestamp(),
-        errorMessage: FieldValue.delete()
+      const docRef = admin.firestore().collection("delete_requests").doc(docId);
+      const snapshot = await docRef.get();
+      if (!snapshot.exists) {
+        res.status(404).json({ error: "Delete request not found" });
+        return;
+      }
+
+      const result = await processDeleteRequestSnapshot(snapshot, {
+        force: requestBody && requestBody.force === true
       });
-      await sendDeleteRequestEmail(sanitizedPayload);
-      await snapshot.ref.update({
-        status: "sent",
-        processedAt: FieldValue.serverTimestamp(),
-        lastError: null,
-        errorMessage: FieldValue.delete()
-      });
+
+      res.status(200).json(result);
     } catch (error) {
-      console.error("SendGrid error", error);
-      const messageText = extractSendgridError(error);
-      await snapshot.ref.update({
-        status: "error",
-        errorMessage: messageText,
-        lastError: messageText,
-        processedAt: FieldValue.serverTimestamp()
-      });
+      console.error("Failed to reprocess delete request", error);
+      res.status(500).json({ error: error.message || "Unknown error" });
     }
   });
