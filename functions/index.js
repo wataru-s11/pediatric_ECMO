@@ -3,9 +3,12 @@ const sgMail = require("@sendgrid/mail");
 const cors = require("cors")({ origin: true });
 
 const config = functions.config();
+const DEFAULT_EMAIL = "sakai@tron2040.com";
 const SENDGRID_KEY = config.sendgrid && config.sendgrid.key;
-const SENDGRID_FROM = config.sendgrid && config.sendgrid.from;
-const SENDGRID_TO = config.sendgrid && config.sendgrid.to;
+const SENDGRID_FROM =
+  (config.sendgrid && config.sendgrid.from) || DEFAULT_EMAIL;
+const SENDGRID_TO =
+  (config.sendgrid && config.sendgrid.to) || DEFAULT_EMAIL;
 
 if (SENDGRID_KEY) {
   sgMail.setApiKey(SENDGRID_KEY);
