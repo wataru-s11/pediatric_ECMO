@@ -15,6 +15,7 @@ firebase functions:config:set \
 - `sendgrid.from` / `sendgrid.to` を設定しない場合、既定で `sakai@tron2040.com` が利用されます。
 - `sendgrid.to` はカンマ区切りで複数アドレスを指定できます。
 - 設定後は `firebase deploy --only functions` で Cloud Functions をデプロイしてください。
+- 関数はリクエスト時の Origin（`https://pediatric-ecmo-registry.web.app` など）を自動で許可するようにしているため、ホスティング先を変更した場合も再デプロイだけで CORS エラーを回避できます。
 
 ## 削除依頼ボタンを動かすためのポイント
 

@@ -1,6 +1,5 @@
 const functions = require("firebase-functions");
 const sgMail = require("@sendgrid/mail");
-const cors = require("cors")({ origin: true });
 
 const config = functions.config();
 const DEFAULT_EMAIL = "sakai@tron2040.com";
@@ -36,104 +35,108 @@ function buildMessageBody({ facility, recordId, recordDate, note }) {
   return lines.join("\n");
 }
 
+function applyCors(req, res) {
+  const origin = req.headers.origin;
+  res.set("Access-Control-Allow-Origin", origin || "*");
+  res.set("Vary", "Origin");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+}
+
 exports.sendDeleteRequest = functions
   .region("asia-northeast1")
-  .https.onRequest((req, res) => {
-    cors(req, res, async () => {
-      if (req.method === "OPTIONS") {
-        res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-        res.set("Access-Control-Allow-Headers", "Content-Type");
-        res.status(204).send("");
-        return;
-      }
+  .https.onRequest(async (req, res) => {
+    applyCors(req, res);
 
-      if (req.method !== "POST") {
-        res.set("Allow", "POST");
-        res.status(405).json({ error: "Method not allowed" });
-        return;
-      }
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
 
-      if (!SENDGRID_KEY) {
-        res
-          .status(500)
-          .json({ error: "SendGrid API key is not configured." });
-        return;
-      }
+    if (req.method !== "POST") {
+      res.set("Allow", "POST");
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
 
-      if (!SENDGRID_FROM || !SENDGRID_TO) {
-        res.status(500).json({
-          error: "SendGrid sender/recipient is not configured."
-        });
-        return;
-      }
+    if (!SENDGRID_KEY) {
+      res.status(500).json({ error: "SendGrid API key is not configured." });
+      return;
+    }
 
-      const {
-        facility = "",
-        recordId = "",
-        recordDate = "",
-        note = "",
-        attachment
-      } = req.body || {};
+    if (!SENDGRID_FROM || !SENDGRID_TO) {
+      res.status(500).json({
+        error: "SendGrid sender/recipient is not configured."
+      });
+      return;
+    }
 
-      if (!facility.trim()) {
-        res.status(400).json({ error: "施設名は必須です。" });
-        return;
-      }
+    const {
+      facility = "",
+      recordId = "",
+      recordDate = "",
+      note = "",
+      attachment
+    } = req.body || {};
 
-      if (!recordId.trim() && !recordDate.trim()) {
-        res.status(400).json({
-          error: "削除依頼IDまたは入力日付のいずれかを入力してください。"
-        });
-        return;
-      }
+    if (!facility.trim()) {
+      res.status(400).json({ error: "施設名は必須です。" });
+      return;
+    }
 
-      const toAddresses = SENDGRID_TO.split(",")
-        .map(address => address.trim())
-        .filter(Boolean);
+    if (!recordId.trim() && !recordDate.trim()) {
+      res.status(400).json({
+        error: "削除依頼IDまたは入力日付のいずれかを入力してください。"
+      });
+      return;
+    }
 
-      if (toAddresses.length === 0) {
-        res.status(500).json({
-          error: "宛先メールアドレスの設定が正しくありません。"
-        });
-        return;
-      }
+    const toAddresses = SENDGRID_TO.split(",")
+      .map(address => address.trim())
+      .filter(Boolean);
 
-      const message = {
-        to: toAddresses,
-        from: SENDGRID_FROM,
-        subject: `【削除依頼】${facility}`,
-        text: buildMessageBody({ facility, recordId, recordDate, note }),
-        html: buildMessageBody({ facility, recordId, recordDate, note })
-          .split("\n")
-          .map(line =>
-            line ? `<p>${escapeHtml(line)}</p>` : "<p>&nbsp;</p>"
-          )
-          .join("")
-      };
+    if (toAddresses.length === 0) {
+      res.status(500).json({
+        error: "宛先メールアドレスの設定が正しくありません。"
+      });
+      return;
+    }
 
-      if (attachment && attachment.content) {
-        message.attachments = [
-          {
-            content: attachment.content,
-            filename: attachment.filename || "attachment",
-            type: attachment.type || "application/octet-stream",
-            disposition: "attachment"
-          }
-        ];
-      }
+    const message = {
+      to: toAddresses,
+      from: SENDGRID_FROM,
+      subject: `【削除依頼】${facility}`,
+      text: buildMessageBody({ facility, recordId, recordDate, note }),
+      html: buildMessageBody({ facility, recordId, recordDate, note })
+        .split("\n")
+        .map(line => (line ? `<p>${escapeHtml(line)}</p>` : "<p>&nbsp;</p>"))
+        .join("")
+    };
 
-      try {
-        await sgMail.send(message);
-        res.status(200).json({ success: true });
-      } catch (error) {
-        console.error("SendGrid error", error);
-        const messageText =
-          (error.response && error.response.body && error.response.body.errors &&
-            error.response.body.errors[0] &&
-            error.response.body.errors[0].message) ||
-          error.message ||
-          "Unknown error";
-        res.status(500).json({ error: messageText });
-      }
-    });
+    if (attachment && attachment.content) {
+      message.attachments = [
+        {
+          content: attachment.content,
+          filename: attachment.filename || "attachment",
+          type: attachment.type || "application/octet-stream",
+          disposition: "attachment"
+        }
+      ];
+    }
+
+    try {
+      await sgMail.send(message);
+      res.status(200).json({ success: true });
+    } catch (error) {
+      console.error("SendGrid error", error);
+      const messageText =
+        (error.response &&
+          error.response.body &&
+          error.response.body.errors &&
+          error.response.body.errors[0] &&
+          error.response.body.errors[0].message) ||
+        error.message ||
+        "Unknown error";
+      res.status(500).json({ error: messageText });
+    }
   });
