@@ -920,6 +920,17 @@
         }
       }
 
+      function clearDeleteRequestForm() {
+        clearValue("delete_facility");
+        clearValue("delete_record_id");
+        clearValue("delete_record_date");
+        clearValue("delete_note");
+        var attachmentResetElement = document.getElementById("delete_attachment");
+        if (attachmentResetElement) {
+          attachmentResetElement.value = "";
+        }
+      }
+
       function handleAttachment(attachmentFile) {
         if (!attachmentFile) {
           return Promise.resolve(null);
@@ -975,7 +986,199 @@
         });
       }
 
-      deleteRequestButton.addEventListener("click", function () {
+      async function attemptFirestoreFallback(payload, originalError) {
+        var outcome = { attempted: false, success: false, errorMessage: null };
+
+        if (!payload || typeof window.submitDeleteRequestViaFirestore !== "function") {
+          return outcome;
+        }
+
+        outcome.attempted = true;
+
+        var originalErrorMessage = "";
+        if (originalError && typeof originalError.message === "string") {
+          originalErrorMessage = originalError.message;
+        }
+
+        try {
+          var warnMessage = "メール送信に失敗しました。";
+          if (originalErrorMessage) {
+            warnMessage += "（エラー: " + originalErrorMessage + "）";
+          }
+          warnMessage += " 削除依頼をFirestoreに登録し、担当者への送信を再試行します。";
+          setStatus(warnMessage, "warn");
+
+          var submissionResult = await window.submitDeleteRequestViaFirestore(payload, {
+            failureReason: originalErrorMessage
+          });
+          clearDeleteRequestForm();
+          outcome.success = true;
+
+          var docId = null;
+          if (submissionResult && typeof submissionResult === "object") {
+            if (typeof submissionResult.docId === "string") {
+              docId = submissionResult.docId;
+            } else if (typeof submissionResult.id === "string") {
+              docId = submissionResult.id;
+            }
+          }
+
+          function appendDocReference(message) {
+            var suffix = docId ? "\n参照ID: " + docId : "";
+            return message + suffix;
+          }
+
+          var initialFailureInfo = originalErrorMessage
+            ? "\n初回エラー: " + originalErrorMessage
+            : "";
+
+          function notifyCompletion() {
+            var completionMessage =
+              "送信処理が完了しました。ありがとうございました。" + initialFailureInfo;
+            completionMessage = appendDocReference(completionMessage);
+            setStatus(completionMessage, "info");
+            alert(completionMessage);
+          }
+
+          function notifyError(message) {
+            var finalMessage = message || "Firestore 経由の送信処理に失敗しました。";
+            if (initialFailureInfo) {
+              finalMessage += initialFailureInfo;
+            }
+            finalMessage = appendDocReference(finalMessage);
+            setStatus("❌ " + finalMessage, "error");
+            alert("❌ " + finalMessage);
+          }
+
+          function notifyTimeout() {
+            var timeoutMessage =
+              "送信処理の確認がタイムアウトしました。しばらくしてからメール受信箱をご確認ください。" +
+              initialFailureInfo;
+            timeoutMessage = appendDocReference(timeoutMessage);
+            setStatus(timeoutMessage, "warn");
+            alert(timeoutMessage);
+          }
+
+          function notifyQueuedWithoutWatcher() {
+            var queuedMessage =
+              "削除依頼を受け付けました。担当者への送信結果は後ほどメール受信箱をご確認ください。" +
+              initialFailureInfo;
+            queuedMessage = appendDocReference(queuedMessage);
+            setStatus(queuedMessage, "warn");
+            alert(queuedMessage);
+          }
+
+          if (docId && typeof window.watchDeleteRequestStatus === "function") {
+            setStatus(
+              appendDocReference(
+                "削除依頼を受け付けました。送信処理の完了を確認しています…" +
+                  initialFailureInfo
+              ),
+              "warn"
+            );
+
+            if (typeof console !== "undefined" && console.info) {
+              console.info("Queued delete request for Firestore processing", { docId: docId });
+            }
+
+            var unsubscribe = null;
+            var hasFinalised = false;
+            var timeoutId = null;
+
+            function finalise(callback) {
+              if (hasFinalised) {
+                return;
+              }
+              hasFinalised = true;
+              if (timeoutId) {
+                clearTimeout(timeoutId);
+                timeoutId = null;
+              }
+              if (typeof unsubscribe === "function") {
+                unsubscribe();
+                unsubscribe = null;
+              }
+              callback();
+            }
+
+            unsubscribe = window.watchDeleteRequestStatus(
+              docId,
+              function onUpdate(statusData) {
+                if (!statusData) {
+                  finalise(function () {
+                    notifyError("削除依頼のステータスを取得できませんでした。");
+                  });
+                  return;
+                }
+
+                var currentStatus = statusData.status || "";
+                if (currentStatus === "sent") {
+                  finalise(function () {
+                    notifyCompletion();
+                  });
+                } else if (currentStatus === "error") {
+                  var statusErrorMessage =
+                    statusData.errorMessage && typeof statusData.errorMessage === "string"
+                      ? statusData.errorMessage.trim()
+                      : "";
+                  finalise(function () {
+                    notifyError(
+                      statusErrorMessage
+                        ? "メール送信に失敗しました: " + statusErrorMessage
+                        : "メール送信に失敗しました。詳細は管理者にお問い合わせください。"
+                    );
+                  });
+                } else {
+                  var progressMessage =
+                    "削除依頼を受け付けました。現在送信処理を実行しています";
+                  if (currentStatus) {
+                    progressMessage += "（ステータス: " + currentStatus + "）";
+                  }
+                  progressMessage += "。";
+                  if (statusData.lastError) {
+                    progressMessage += "\n初回エラー: " + statusData.lastError;
+                  }
+                  if (statusData.errorMessage && statusData.errorMessage !== statusData.lastError) {
+                    progressMessage += "\n最新エラー: " + statusData.errorMessage;
+                  }
+                  progressMessage = appendDocReference(progressMessage);
+                  setStatus(progressMessage, "warn");
+                }
+              },
+              function onListenerError(listenerError) {
+                var listenerMessage =
+                  listenerError && typeof listenerError.message === "string"
+                    ? listenerError.message
+                    : "削除依頼のステータス監視中にエラーが発生しました。";
+                finalise(function () {
+                  notifyError(listenerMessage);
+                });
+              }
+            );
+
+            timeoutId = setTimeout(function () {
+              finalise(function () {
+                notifyTimeout();
+              });
+            }, 5 * 60 * 1000);
+          } else {
+            notifyQueuedWithoutWatcher();
+          }
+
+          return outcome;
+        } catch (firestoreError) {
+          if (typeof console !== "undefined" && console.error) {
+            console.error("Firestore fallback error", firestoreError);
+          }
+          var fallbackMessage =
+            (firestoreError && firestoreError.message) ||
+            "Firestore への登録に失敗しました。";
+          outcome.errorMessage = fallbackMessage;
+          return outcome;
+        }
+      }
+
+      deleteRequestButton.addEventListener("click", async function () {
         var deleteRequestEndpoint = resolveEndpoint();
         var facility = getTrimmedValue("delete_facility");
         var recordId = getTrimmedValue("delete_record_id");
@@ -1008,62 +1211,83 @@
           deleteRequestButton.textContent = originalText;
         }
 
-        handleAttachment(attachmentFile)
-          .then(function (attachmentPayload) {
-            if (!deleteRequestEndpoint) {
-              var message =
-                "削除依頼メール送信先の URL が設定されていません。ボタン横の案内を参照して設定してください。";
-              setStatus(message, "error");
-              throw new Error("削除依頼メール送信先の URL が設定されていません。");
-            }
+        var attachmentPayload = null;
+        var requestPayload = null;
 
-            setStatus("削除依頼メールを送信中です…", "warn");
+        try {
+          attachmentPayload = await handleAttachment(attachmentFile);
 
-            var payload = {
-              facility: facility,
-              recordId: recordId,
-              recordDate: recordDate,
-              note: note,
-              attachment: attachmentPayload
-            };
-            return sendRequest(deleteRequestEndpoint, payload);
-          })
-          .then(function (response) {
-            if (!response.ok) {
-              return response.json().then(function (errorData) {
-                var errorMessage = errorData && errorData.error ? errorData.error : "HTTP " + response.status;
-                throw new Error(errorMessage);
-              });
-            }
+          requestPayload = {
+            facility: facility,
+            recordId: recordId,
+            recordDate: recordDate,
+            note: note,
+            attachment: attachmentPayload
+          };
 
-            setStatus("送信が完了しました。ありがとうございました。", "info");
-            alert("送信が完了しました。ありがとうございました。");
-            clearValue("delete_facility");
-            clearValue("delete_record_id");
-            clearValue("delete_record_date");
-            clearValue("delete_note");
-            if (attachmentInput) {
-              attachmentInput.value = "";
+          if (!deleteRequestEndpoint) {
+            var missingEndpointMessage =
+              "削除依頼メール送信先の URL が設定されていません。ボタン横の案内を参照して設定してください。";
+            setStatus(missingEndpointMessage, "error");
+            throw new Error("削除依頼メール送信先の URL が設定されていません。");
+          }
+
+          setStatus("削除依頼メールを送信中です…", "warn");
+
+          var response = await sendRequest(deleteRequestEndpoint, requestPayload);
+          if (!response.ok) {
+            var errorMessage = "HTTP " + response.status;
+            if (typeof response.json === "function") {
+              try {
+                var errorData = await response.json();
+                if (errorData && errorData.error) {
+                  errorMessage = errorData.error;
+                }
+              } catch (parseError) {
+                if (typeof console !== "undefined" && console.warn) {
+                  console.warn("Failed to parse error response", parseError);
+                }
+              }
             }
-          })
-          .catch(function (error) {
-            if (typeof console !== "undefined" && console.error) {
-              console.error("SendGrid error", error);
-            }
-            var errorMessage = "❌ メールの送信に失敗しました: " + error.message;
-            setStatus(errorMessage, "error");
-            alert(errorMessage);
-          })
-          .then(function () {
-            restoreButton();
-          });
+            throw new Error(errorMessage);
+          }
+
+          setStatus("送信が完了しました。ありがとうございました。", "info");
+          alert("送信が完了しました。ありがとうございました。");
+          clearDeleteRequestForm();
+        } catch (error) {
+          if (typeof console !== "undefined" && console.error) {
+            console.error("SendGrid error", error);
+          }
+
+          var fallbackOutcome = await attemptFirestoreFallback(requestPayload, error);
+
+          if (fallbackOutcome && fallbackOutcome.success) {
+            return;
+          }
+
+          var finalErrorMessage = fallbackOutcome && fallbackOutcome.attempted && fallbackOutcome.errorMessage
+            ? "❌ Firestore への登録に失敗しました: " + fallbackOutcome.errorMessage
+            : "❌ メールの送信に失敗しました: " + (error && error.message ? error.message : "Unknown error");
+          setStatus(finalErrorMessage, "error");
+          alert(finalErrorMessage);
+        } finally {
+          restoreButton();
+        }
       });
     })();
   </script>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  doc,
+  onSnapshot
+} from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 import * as XLSX from "https://cdn.sheetjs.com/xlsx-0.19.3/package/xlsx.mjs";
 
 // Firebase設定（自分の設定でOK）
@@ -1078,6 +1302,94 @@ const firebaseConfig = {
 };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+
+window.submitDeleteRequestViaFirestore = async function submitDeleteRequestViaFirestore(
+  payload,
+  options
+) {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("削除依頼の内容が不正です。");
+  }
+
+  var failureReason = "";
+  if (options && typeof options.failureReason === "string") {
+    failureReason = options.failureReason.trim();
+  }
+
+  const trimValue = value => (typeof value === "string" ? value.trim() : "");
+  const facility = trimValue(payload.facility);
+  const recordId = trimValue(payload.recordId);
+  const recordDate = trimValue(payload.recordDate);
+  const note = typeof payload.note === "string" ? payload.note : "";
+
+  if (!facility) {
+    throw new Error("施設名は必須です。");
+  }
+
+  if (!recordId && !recordDate) {
+    throw new Error("削除依頼IDまたは入力日付のいずれかを入力してください。");
+  }
+
+  let attachment = null;
+  if (payload.attachment && payload.attachment.content) {
+    attachment = {
+      content: String(payload.attachment.content),
+      filename: payload.attachment.filename ? String(payload.attachment.filename) : "attachment",
+      type: payload.attachment.type ? String(payload.attachment.type) : "application/octet-stream"
+    };
+
+    var approximateBytes = Math.ceil((attachment.content.length * 3) / 4);
+    if (approximateBytes > 900000) {
+      throw new Error("添付ファイルが大きすぎます。1MB未満のファイルをご利用ください。");
+    }
+  }
+
+  const docPayload = {
+    facility,
+    recordId,
+    recordDate,
+    note,
+    attachment,
+    status: "pending",
+    submittedAt: new Date().toISOString(),
+    lastError: failureReason || null
+  };
+
+  const docRef = await addDoc(collection(db, "delete_requests"), docPayload);
+  return { docId: docRef.id };
+};
+
+window.watchDeleteRequestStatus = function watchDeleteRequestStatus(
+  docId,
+  onUpdate,
+  onError
+) {
+  if (!docId) {
+    return function noop() {};
+  }
+
+  try {
+    const documentRef = doc(db, "delete_requests", docId);
+    return onSnapshot(
+      documentRef,
+      snapshot => {
+        if (typeof onUpdate === "function") {
+          onUpdate(snapshot.exists() ? snapshot.data() : null);
+        }
+      },
+      error => {
+        if (typeof onError === "function") {
+          onError(error);
+        }
+      }
+    );
+  } catch (listenerError) {
+    if (typeof onError === "function") {
+      onError(listenerError);
+    }
+    return function noop() {};
+  }
+};
 
 // ▼ 登録ボタン
 document.getElementById("submitButton").addEventListener("click", async () => {
