@@ -191,6 +191,23 @@ exports.processDeleteRequest = functions
   .region("asia-northeast1")
   .firestore.document("delete_requests/{requestId}")
   .onCreate(async snapshot => {
+    const requestData = snapshot.data() || {};
+
+    try {
+      const metadataUpdate = {
+        lastAttemptAt: FieldValue.serverTimestamp(),
+        attemptCount: FieldValue.increment(1)
+      };
+
+      if (!requestData.firstQueuedAt) {
+        metadataUpdate.firstQueuedAt = FieldValue.serverTimestamp();
+      }
+
+      await snapshot.ref.set(metadataUpdate, { merge: true });
+    } catch (metadataError) {
+      console.error("Failed to annotate delete request metadata", metadataError);
+    }
+
     if (!SENDGRID_KEY) {
       await snapshot.ref.update({
         status: "error",
@@ -213,7 +230,7 @@ exports.processDeleteRequest = functions
 
     let sanitizedPayload;
     try {
-      sanitizedPayload = sanitizeDeleteRequestPayload(snapshot.data() || {});
+      sanitizedPayload = sanitizeDeleteRequestPayload(requestData);
     } catch (validationError) {
       await snapshot.ref.update({
         status: "error",
