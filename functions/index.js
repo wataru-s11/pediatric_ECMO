@@ -195,6 +195,7 @@ exports.processDeleteRequest = functions
       await snapshot.ref.update({
         status: "error",
         errorMessage: "SendGrid API key is not configured.",
+        lastError: "SendGrid API key is not configured.",
         processedAt: FieldValue.serverTimestamp()
       });
       return;
@@ -204,6 +205,7 @@ exports.processDeleteRequest = functions
       await snapshot.ref.update({
         status: "error",
         errorMessage: "SendGrid sender/recipient is not configured.",
+        lastError: "SendGrid sender/recipient is not configured.",
         processedAt: FieldValue.serverTimestamp()
       });
       return;
@@ -216,16 +218,24 @@ exports.processDeleteRequest = functions
       await snapshot.ref.update({
         status: "error",
         errorMessage: validationError.message,
+        lastError: validationError.message,
         processedAt: FieldValue.serverTimestamp()
       });
       return;
     }
 
     try {
+      await snapshot.ref.update({
+        status: "processing",
+        processingStartedAt: FieldValue.serverTimestamp(),
+        errorMessage: FieldValue.delete()
+      });
       await sendDeleteRequestEmail(sanitizedPayload);
       await snapshot.ref.update({
         status: "sent",
-        processedAt: FieldValue.serverTimestamp()
+        processedAt: FieldValue.serverTimestamp(),
+        lastError: null,
+        errorMessage: FieldValue.delete()
       });
     } catch (error) {
       console.error("SendGrid error", error);
@@ -233,6 +243,7 @@ exports.processDeleteRequest = functions
       await snapshot.ref.update({
         status: "error",
         errorMessage: messageText,
+        lastError: messageText,
         processedAt: FieldValue.serverTimestamp()
       });
     }
