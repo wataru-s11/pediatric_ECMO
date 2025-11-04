@@ -295,6 +295,7 @@ exports.reprocessDeleteRequest = functions
       res.status(204).send("");
       return;
     }
+  });
 
     if (req.method !== "POST") {
       res.set("Allow", "POST");
