@@ -920,6 +920,17 @@
         }
       }
 
+      function clearDeleteRequestForm() {
+        clearValue("delete_facility");
+        clearValue("delete_record_id");
+        clearValue("delete_record_date");
+        clearValue("delete_note");
+        var attachmentResetElement = document.getElementById("delete_attachment");
+        if (attachmentResetElement) {
+          attachmentResetElement.value = "";
+        }
+      }
+
       function handleAttachment(attachmentFile) {
         if (!attachmentFile) {
           return Promise.resolve(null);
@@ -975,7 +986,42 @@
         });
       }
 
-      deleteRequestButton.addEventListener("click", function () {
+      async function attemptFirestoreFallback(payload) {
+        var outcome = { attempted: false, success: false, errorMessage: null };
+
+        if (!payload || typeof window.submitDeleteRequestViaFirestore !== "function") {
+          return outcome;
+        }
+
+        outcome.attempted = true;
+
+        try {
+          setStatus(
+            "メール送信に失敗したため、削除依頼を受け付けました。数分以内に送信処理が実行されます。",
+            "warn"
+          );
+          await window.submitDeleteRequestViaFirestore(payload);
+          clearDeleteRequestForm();
+          setStatus(
+            "削除依頼を受け付けました。送信処理が完了次第、担当者にメールが送信されます。",
+            "info"
+          );
+          alert("削除依頼を受け付けました。送信処理が完了次第、担当者にメールが送信されます。");
+          outcome.success = true;
+          return outcome;
+        } catch (firestoreError) {
+          if (typeof console !== "undefined" && console.error) {
+            console.error("Firestore fallback error", firestoreError);
+          }
+          var fallbackMessage =
+            (firestoreError && firestoreError.message) ||
+            "Firestore への登録に失敗しました。";
+          outcome.errorMessage = fallbackMessage;
+          return outcome;
+        }
+      }
+
+      deleteRequestButton.addEventListener("click", async function () {
         var deleteRequestEndpoint = resolveEndpoint();
         var facility = getTrimmedValue("delete_facility");
         var recordId = getTrimmedValue("delete_record_id");
@@ -1008,55 +1054,69 @@
           deleteRequestButton.textContent = originalText;
         }
 
-        handleAttachment(attachmentFile)
-          .then(function (attachmentPayload) {
-            if (!deleteRequestEndpoint) {
-              var message =
-                "削除依頼メール送信先の URL が設定されていません。ボタン横の案内を参照して設定してください。";
-              setStatus(message, "error");
-              throw new Error("削除依頼メール送信先の URL が設定されていません。");
-            }
+        var attachmentPayload = null;
+        var requestPayload = null;
 
-            setStatus("削除依頼メールを送信中です…", "warn");
+        try {
+          attachmentPayload = await handleAttachment(attachmentFile);
 
-            var payload = {
-              facility: facility,
-              recordId: recordId,
-              recordDate: recordDate,
-              note: note,
-              attachment: attachmentPayload
-            };
-            return sendRequest(deleteRequestEndpoint, payload);
-          })
-          .then(function (response) {
-            if (!response.ok) {
-              return response.json().then(function (errorData) {
-                var errorMessage = errorData && errorData.error ? errorData.error : "HTTP " + response.status;
-                throw new Error(errorMessage);
-              });
-            }
+          requestPayload = {
+            facility: facility,
+            recordId: recordId,
+            recordDate: recordDate,
+            note: note,
+            attachment: attachmentPayload
+          };
 
-            setStatus("送信が完了しました。ありがとうございました。", "info");
-            alert("送信が完了しました。ありがとうございました。");
-            clearValue("delete_facility");
-            clearValue("delete_record_id");
-            clearValue("delete_record_date");
-            clearValue("delete_note");
-            if (attachmentInput) {
-              attachmentInput.value = "";
+          if (!deleteRequestEndpoint) {
+            var missingEndpointMessage =
+              "削除依頼メール送信先の URL が設定されていません。ボタン横の案内を参照して設定してください。";
+            setStatus(missingEndpointMessage, "error");
+            throw new Error("削除依頼メール送信先の URL が設定されていません。");
+          }
+
+          setStatus("削除依頼メールを送信中です…", "warn");
+
+          var response = await sendRequest(deleteRequestEndpoint, requestPayload);
+          if (!response.ok) {
+            var errorMessage = "HTTP " + response.status;
+            if (typeof response.json === "function") {
+              try {
+                var errorData = await response.json();
+                if (errorData && errorData.error) {
+                  errorMessage = errorData.error;
+                }
+              } catch (parseError) {
+                if (typeof console !== "undefined" && console.warn) {
+                  console.warn("Failed to parse error response", parseError);
+                }
+              }
             }
-          })
-          .catch(function (error) {
-            if (typeof console !== "undefined" && console.error) {
-              console.error("SendGrid error", error);
-            }
-            var errorMessage = "❌ メールの送信に失敗しました: " + error.message;
-            setStatus(errorMessage, "error");
-            alert(errorMessage);
-          })
-          .then(function () {
-            restoreButton();
-          });
+            throw new Error(errorMessage);
+          }
+
+          setStatus("送信が完了しました。ありがとうございました。", "info");
+          alert("送信が完了しました。ありがとうございました。");
+          clearDeleteRequestForm();
+        } catch (error) {
+          if (typeof console !== "undefined" && console.error) {
+            console.error("SendGrid error", error);
+          }
+
+          var fallbackOutcome = await attemptFirestoreFallback(requestPayload);
+
+          if (fallbackOutcome && fallbackOutcome.success) {
+            return;
+          }
+
+          var finalErrorMessage = fallbackOutcome && fallbackOutcome.attempted && fallbackOutcome.errorMessage
+            ? "❌ Firestore への登録に失敗しました: " + fallbackOutcome.errorMessage
+            : "❌ メールの送信に失敗しました: " + (error && error.message ? error.message : "Unknown error");
+          setStatus(finalErrorMessage, "error");
+          alert(finalErrorMessage);
+        } finally {
+          restoreButton();
+        }
       });
     })();
   </script>
@@ -1078,6 +1138,54 @@ const firebaseConfig = {
 };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+
+window.submitDeleteRequestViaFirestore = async function submitDeleteRequestViaFirestore(
+  payload
+) {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("削除依頼の内容が不正です。");
+  }
+
+  const trimValue = value => (typeof value === "string" ? value.trim() : "");
+  const facility = trimValue(payload.facility);
+  const recordId = trimValue(payload.recordId);
+  const recordDate = trimValue(payload.recordDate);
+  const note = typeof payload.note === "string" ? payload.note : "";
+
+  if (!facility) {
+    throw new Error("施設名は必須です。");
+  }
+
+  if (!recordId && !recordDate) {
+    throw new Error("削除依頼IDまたは入力日付のいずれかを入力してください。");
+  }
+
+  let attachment = null;
+  if (payload.attachment && payload.attachment.content) {
+    attachment = {
+      content: String(payload.attachment.content),
+      filename: payload.attachment.filename ? String(payload.attachment.filename) : "attachment",
+      type: payload.attachment.type ? String(payload.attachment.type) : "application/octet-stream"
+    };
+
+    var approximateBytes = Math.ceil((attachment.content.length * 3) / 4);
+    if (approximateBytes > 900000) {
+      throw new Error("添付ファイルが大きすぎます。1MB未満のファイルをご利用ください。");
+    }
+  }
+
+  const docPayload = {
+    facility,
+    recordId,
+    recordDate,
+    note,
+    attachment,
+    status: "pending",
+    submittedAt: new Date().toISOString()
+  };
+
+  await addDoc(collection(db, "delete_requests"), docPayload);
+};
 
 // ▼ 登録ボタン
 document.getElementById("submitButton").addEventListener("click", async () => {
