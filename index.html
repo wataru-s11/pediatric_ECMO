@@ -867,58 +867,15 @@ if (deleteRequestButton) {
       return;
     }
 
-    const subject = `ECMOレジストリ削除依頼 (${facility})`;
-    const bodyLines = [
-      "以下の内容で削除をお願いします。",
-      "",
-      `施設名: ${facility}`,
-      `削除依頼ID: ${recordId || "-"}`,
-      `入力日付: ${recordDate || "-"}`,
-      "",
-      "自由記載:",
-      note || "-"
-    ];
-
-    const ccRecipients = ["w-sakai1128@sapmed.ac.jp"].filter(Boolean).map(email => ({ email }));
-    const bccRecipients = [];
-
-    const personalizations = [{
-      to: [{ email: "sakai@tron2040.com" }],
-      subject: subject
-    }];
-
-    if (ccRecipients.length > 0) {
-      personalizations[0].cc = ccRecipients;
-    }
-
-    if (bccRecipients.length > 0) {
-      personalizations[0].bcc = bccRecipients.map(email => ({ email }));
-    }
-
-    const payload = {
-      personalizations,
-      from: {
-        email: "no-reply@tron2040.com",
-        name: "ECMO Registry"
-      },
-      content: [
-        {
-          type: "text/plain",
-          value: bodyLines.join("\n")
-        }
-      ]
-    };
-
+    let attachmentPayload = null;
     if (attachmentFile) {
       try {
         const base64Content = await readFileAsBase64(attachmentFile);
-        payload.attachments = [
-          {
-            content: base64Content,
-            filename: attachmentFile.name,
-            type: attachmentFile.type || "application/octet-stream"
-          }
-        ];
+        attachmentPayload = {
+          content: base64Content,
+          filename: attachmentFile.name,
+          type: attachmentFile.type || "application/octet-stream"
+        };
       } catch (error) {
         alert(error.message);
         return;
@@ -930,16 +887,26 @@ if (deleteRequestButton) {
     deleteRequestButton.textContent = "送信中...";
 
     try {
-      const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`
-        },
-        body: JSON.stringify(payload)
-      });
+      const response = await fetch(
+        "https://asia-northeast1-pediatric-ecmo-registry.cloudfunctions.net/sendDeleteRequest",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            facility,
+            recordId,
+            recordDate,
+            note,
+            attachment: attachmentPayload
+          })
+        }
+      );
 
-
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        const message = errorData?.error || `HTTP ${response.status}`;
+        throw new Error(message);
+      }
       alert("送信が完了しました。ありがとうございました。");
       document.getElementById("delete_facility")?.value = "";
       document.getElementById("delete_record_id")?.value = "";
