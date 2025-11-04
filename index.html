@@ -624,23 +624,12 @@
   </fieldset>
 
   <script>
-    const DEFAULT_SENDGRID_API_KEY = "XXXXYYYY";
-    let SENDGRID_API_KEY = sessionStorage.getItem("sendgridApiKey") || DEFAULT_SENDGRID_API_KEY;
 
-    if (!sessionStorage.getItem("sendgridApiKey")) {
-      sessionStorage.setItem("sendgridApiKey", SENDGRID_API_KEY);
-    }
-
-    function requestSendGridApiKey() {
-      SENDGRID_API_KEY = DEFAULT_SENDGRID_API_KEY;
-      sessionStorage.setItem("sendgridApiKey", SENDGRID_API_KEY);
-      return SENDGRID_API_KEY;
     }
 
     function clearStoredSendGridApiKey() {
       sessionStorage.removeItem("sendgridApiKey");
-      SENDGRID_API_KEY = DEFAULT_SENDGRID_API_KEY;
-      sessionStorage.setItem("sendgridApiKey", SENDGRID_API_KEY);
+
     }
 
     function readFileAsBase64(file) {
