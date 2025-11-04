@@ -624,7 +624,11 @@
     <input type="file" id="delete_attachment" accept="image/*"><br>
     <small>※ 送信したい画像ファイルがあれば指定してください（1枚のみ）。</small><br><br>
 
-    <button type="button" id="deleteRequestButton">削除依頼メールを送信</button>
+    <button
+      type="button"
+      id="deleteRequestButton"
+      data-delete-request-endpoint="https://asia-northeast1-pediatric-ecmo-registry.cloudfunctions.net/sendDeleteRequest"
+    >削除依頼メールを送信</button>
   </fieldset>
 
   <script>
@@ -733,6 +737,121 @@
       XLSX.utils.book_append_sheet(wb, ws, "ECMO_data");
       XLSX.writeFile(wb, "ecmo_registry.xlsx");
     };
+  </script>
+
+  <script>
+    (function initialiseDeleteRequestForm() {
+      const deleteRequestButton = document.getElementById("deleteRequestButton");
+      if (!deleteRequestButton) {
+        return;
+      }
+
+      const endpointFromWindow =
+        typeof window.DELETE_REQUEST_ENDPOINT === "string"
+          ? window.DELETE_REQUEST_ENDPOINT.trim()
+          : "";
+      const endpointFromAttribute =
+        deleteRequestButton.getAttribute("data-delete-request-endpoint") || "";
+
+      const deleteRequestEndpoint =
+        endpointFromWindow || endpointFromAttribute.trim();
+
+      if (!deleteRequestEndpoint) {
+        console.warn(
+          "削除依頼メールの送信先URLが設定されていません。window.DELETE_REQUEST_ENDPOINT か data-delete-request-endpoint で設定してください。"
+        );
+      }
+
+      if (location.protocol === "file:") {
+        console.warn(
+          "ローカルファイル（file://）から開いているため、ブラウザによっては Firebase SDK やモジュールが読み込めません。開発サーバーや Firebase Hosting からアクセスしてください。"
+        );
+      }
+
+      deleteRequestButton.addEventListener("click", async () => {
+        const facility =
+          document.getElementById("delete_facility")?.value.trim() || "";
+        const recordId =
+          document.getElementById("delete_record_id")?.value.trim() || "";
+        const recordDate =
+          document.getElementById("delete_record_date")?.value || "";
+        const note =
+          document.getElementById("delete_note")?.value.trim() || "";
+        const attachmentFile =
+          document.getElementById("delete_attachment")?.files?.[0];
+
+        if (!facility) {
+          alert("施設名を入力してください。");
+          return;
+        }
+
+        if (!recordId && !recordDate) {
+          alert("削除依頼IDまたは入力日付のいずれかを入力してください。");
+          return;
+        }
+
+        let attachmentPayload = null;
+        if (attachmentFile) {
+          try {
+            const base64Content = await window.readFileAsBase64(attachmentFile);
+            attachmentPayload = {
+              content: base64Content,
+              filename: attachmentFile.name,
+              type: attachmentFile.type || "application/octet-stream"
+            };
+          } catch (error) {
+            alert(error.message);
+            return;
+          }
+        }
+
+        const originalText = deleteRequestButton.textContent;
+        deleteRequestButton.disabled = true;
+        deleteRequestButton.textContent = "送信中...";
+
+        try {
+          if (!deleteRequestEndpoint) {
+            throw new Error(
+              "削除依頼メール送信先の URL が設定されていません。"
+            );
+          }
+
+          const response = await fetch(deleteRequestEndpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              facility,
+              recordId,
+              recordDate,
+              note,
+              attachment: attachmentPayload
+            })
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => null);
+            const message = errorData?.error || `HTTP ${response.status}`;
+            throw new Error(message);
+          }
+
+          alert("送信が完了しました。ありがとうございました。");
+          document.getElementById("delete_facility")?.value = "";
+          document.getElementById("delete_record_id")?.value = "";
+          document.getElementById("delete_record_date")?.value = "";
+          document.getElementById("delete_note")?.value = "";
+          const attachmentInput = document.getElementById("delete_attachment");
+          if (attachmentInput) {
+            attachmentInput.value = "";
+          }
+        } catch (error) {
+          console.error("SendGrid error", error);
+          alert(`❌ メールの送信に失敗しました: ${error.message}`);
+        } finally {
+          deleteRequestButton.disabled = false;
+          deleteRequestButton.textContent = originalText;
+        }
+      });
+    })();
   </script>
 
 <script type="module">
@@ -847,84 +966,6 @@ document.getElementById("submitButton").addEventListener("click", async () => {
     console.error(e);
   }
 });
-
-const deleteRequestButton = document.getElementById("deleteRequestButton");
-if (deleteRequestButton) {
-  deleteRequestButton.addEventListener("click", async () => {
-    const facility = document.getElementById("delete_facility")?.value.trim() || "";
-    const recordId = document.getElementById("delete_record_id")?.value.trim() || "";
-    const recordDate = document.getElementById("delete_record_date")?.value || "";
-    const note = document.getElementById("delete_note")?.value.trim() || "";
-    const attachmentFile = document.getElementById("delete_attachment")?.files?.[0];
-
-    if (!facility) {
-      alert("施設名を入力してください。");
-      return;
-    }
-
-    if (!recordId && !recordDate) {
-      alert("削除依頼IDまたは入力日付のいずれかを入力してください。");
-      return;
-    }
-
-    let attachmentPayload = null;
-    if (attachmentFile) {
-      try {
-        const base64Content = await window.readFileAsBase64(attachmentFile);
-        attachmentPayload = {
-          content: base64Content,
-          filename: attachmentFile.name,
-          type: attachmentFile.type || "application/octet-stream"
-        };
-      } catch (error) {
-        alert(error.message);
-        return;
-      }
-    }
-
-    const originalText = deleteRequestButton.textContent;
-    deleteRequestButton.disabled = true;
-    deleteRequestButton.textContent = "送信中...";
-
-    try {
-      const response = await fetch(
-        "https://asia-northeast1-pediatric-ecmo-registry.cloudfunctions.net/sendDeleteRequest",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            facility,
-            recordId,
-            recordDate,
-            note,
-            attachment: attachmentPayload
-          })
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        const message = errorData?.error || `HTTP ${response.status}`;
-        throw new Error(message);
-      }
-      alert("送信が完了しました。ありがとうございました。");
-      document.getElementById("delete_facility")?.value = "";
-      document.getElementById("delete_record_id")?.value = "";
-      document.getElementById("delete_record_date")?.value = "";
-      document.getElementById("delete_note")?.value = "";
-      const attachmentInput = document.getElementById("delete_attachment");
-      if (attachmentInput) {
-        attachmentInput.value = "";
-      }
-    } catch (error) {
-      console.error("SendGrid error", error);
-      alert(`❌ メールの送信に失敗しました: ${error.message}`);
-    } finally {
-      deleteRequestButton.disabled = false;
-      deleteRequestButton.textContent = originalText;
-    }
-  });
-}
 
 // ▼ 管理者全件エクセル出力ボタン
 document.getElementById("exportAllButton").addEventListener("click", async () => {
