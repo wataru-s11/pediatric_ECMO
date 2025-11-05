@@ -940,10 +940,6 @@
         initialMessages.push("削除依頼のバックグラウンド処理用エンドポイントを確認しました。");
       }
 
-      if (reprocessEndpoint) {
-        initialMessages.push("削除依頼のバックグラウンド処理用エンドポイントを確認しました。");
-      }
-
       if (typeof location !== "undefined" && location.protocol === "file:") {
         var fileWarning =
           "ローカルファイル（file://）から開いているため、動作しない場合は開発サーバー経由でアクセスしてください。";
@@ -1107,6 +1103,15 @@
         if (typeof statusData.attemptCount === "number") {
           lines.push("試行回数: " + statusData.attemptCount);
         }
+        if (typeof statusData.retryRequestCount === "number") {
+          lines.push("再処理要求回数: " + statusData.retryRequestCount);
+        }
+        if (statusData.firstQueuedAt) {
+          var firstQueued = formatTimestamp(statusData.firstQueuedAt);
+          if (firstQueued) {
+            lines.push("初回受付: " + firstQueued);
+          }
+        }
         if (statusData.lastAttemptAt) {
           var lastAttempt = formatTimestamp(statusData.lastAttemptAt);
           if (lastAttempt) {
@@ -1125,6 +1130,12 @@
             lines.push("処理完了: " + processedAt);
           }
         }
+        if (statusData.retryRequestedAt) {
+          var retryRequested = formatTimestamp(statusData.retryRequestedAt);
+          if (retryRequested) {
+            lines.push("再処理リクエスト: " + retryRequested);
+          }
+        }
 
         return lines.length > 0 ? "\n" + lines.join("\n") : "";
       }
@@ -1133,6 +1144,8 @@
         if (!docId) {
           return;
         }
+
+        var reprocessTriggered = false;
 
         if (typeof window.callReprocessDeleteRequest === "function") {
           try {
@@ -1151,6 +1164,7 @@
                 callableResult
               );
             }
+            reprocessTriggered = true;
             return;
           } catch (callableError) {
             if (typeof console !== "undefined" && console.warn) {
@@ -1162,51 +1176,87 @@
           }
         }
 
-        if (!reprocessEndpoint) {
-          return;
-        }
+        if (!reprocessTriggered && reprocessEndpoint) {
+          try {
+            var triggerResponse = await sendRequest(reprocessEndpoint, {
+              docId: docId
+            });
 
-        try {
-          var triggerResponse = await sendRequest(reprocessEndpoint, {
-            docId: docId
-          });
-
-          if (!triggerResponse || typeof triggerResponse.ok !== "boolean") {
-            return;
-          }
-
-          if (!triggerResponse.ok) {
+            if (triggerResponse && typeof triggerResponse.ok === "boolean") {
+              if (!triggerResponse.ok) {
+                if (typeof console !== "undefined" && console.warn) {
+                  console.warn(
+                    "Failed to trigger delete request reprocessing",
+                    triggerResponse.status
+                  );
+                }
+              } else {
+                reprocessTriggered = true;
+                if (typeof triggerResponse.json === "function") {
+                  triggerResponse
+                    .json()
+                    .then(function (triggerData) {
+                      if (
+                        triggerData &&
+                        typeof triggerData === "object" &&
+                        typeof triggerData.status === "string" &&
+                        typeof console !== "undefined" &&
+                        console.info
+                      ) {
+                        console.info(
+                          "Delete request reprocess response",
+                          triggerData
+                        );
+                      }
+                    })
+                    .catch(function () {
+                      /* ignore JSON parse errors */
+                    });
+                }
+                return;
+              }
+            }
+          } catch (triggerError) {
             if (typeof console !== "undefined" && console.warn) {
               console.warn(
-                "Failed to trigger delete request reprocessing",
-                triggerResponse.status
+                "Unable to trigger delete request reprocessing",
+                triggerError
+              );
+            }
+          }
+        }
+
+        if (
+          !reprocessTriggered &&
+          typeof window.requestDeleteRequestReprocessViaFirestore === "function"
+        ) {
+          try {
+            await window.requestDeleteRequestReprocessViaFirestore(docId, {
+              source: "client-fallback",
+              requestedBy: "client"
+            });
+            reprocessTriggered = true;
+            if (typeof console !== "undefined" && console.info) {
+              console.info(
+                "Marked delete request for retry via Firestore",
+                { docId: docId }
               );
             }
             return;
+          } catch (firestoreTriggerError) {
+            if (typeof console !== "undefined" && console.warn) {
+              console.warn(
+                "Failed to mark delete request for retry via Firestore",
+                firestoreTriggerError
+              );
+            }
           }
+        }
 
-          if (typeof triggerResponse.json === "function") {
-            triggerResponse
-              .json()
-              .then(function (triggerData) {
-                if (
-                  triggerData &&
-                  typeof triggerData === "object" &&
-                  typeof triggerData.status === "string" &&
-                  typeof console !== "undefined" &&
-                  console.info
-                ) {
-                  console.info("Delete request reprocess response", triggerData);
-                }
-              })
-              .catch(function () {
-                /* ignore JSON parse errors */
-              });
-          }
-        } catch (triggerError) {
-          if (typeof console !== "undefined" && console.warn) {
-            console.warn("Unable to trigger delete request reprocessing", triggerError);
-          }
+        if (!reprocessTriggered && typeof console !== "undefined" && console.warn) {
+          console.warn("Unable to trigger delete request processing", {
+            docId: docId
+          });
         }
       }
 
@@ -1553,7 +1603,10 @@ import {
   addDoc,
   getDocs,
   doc,
-  onSnapshot
+  onSnapshot,
+  updateDoc,
+  serverTimestamp,
+  increment
 } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-functions.js";
 import * as XLSX from "https://cdn.sheetjs.com/xlsx-0.19.3/package/xlsx.mjs";
@@ -1621,271 +1674,49 @@ window.callReprocessDeleteRequest = async function callReprocessDeleteRequest(
   }
 };
 
+window.requestDeleteRequestReprocessViaFirestore = async function requestDeleteRequestReprocessViaFirestore(
+  docId,
+  options
+) {
+  var identifier = typeof docId === "string" ? docId.trim() : "";
+  if (!identifier) {
+    throw new Error("再処理する削除依頼の参照IDが不正です。");
+  }
+
+  var requestedBy = "client";
+  if (options && typeof options.requestedBy === "string" && options.requestedBy) {
+    requestedBy = options.requestedBy.trim();
+  }
+
+  var source = "client";
+  if (options && typeof options.source === "string" && options.source) {
+    source = options.source.trim();
+  }
+
+  var failureReason = "";
+  if (options && typeof options.failureReason === "string") {
+    failureReason = options.failureReason.trim();
+  }
+
+  const documentRef = doc(db, "delete_requests", identifier);
+  const updatePayload = {
+    status: "pending",
+    errorMessage: null,
+    retryRequestedAt: serverTimestamp(),
+    retryRequestCount: increment(1),
+    retryRequestedBy: requestedBy || "client",
+    retryRequestSource: source || "client"
+  };
+
+  if (failureReason) {
+    updatePayload.lastError = failureReason;
+  }
+
+  await updateDoc(documentRef, updatePayload);
+  return true;
+};
+
 document.dispatchEvent(new CustomEvent("delete-request-callable-ready"));
-
-window.submitDeleteRequestViaFirestore = async function submitDeleteRequestViaFirestore(
-  payload,
-  options
-) {
-  if (!payload || typeof payload !== "object") {
-    throw new Error("削除依頼の内容が不正です。");
-  }
-
-  var failureReason = "";
-  if (options && typeof options.failureReason === "string") {
-    failureReason = options.failureReason.trim();
-  }
-
-  const trimValue = value => (typeof value === "string" ? value.trim() : "");
-  const facility = trimValue(payload.facility);
-  const recordId = trimValue(payload.recordId);
-  const recordDate = trimValue(payload.recordDate);
-  const note = typeof payload.note === "string" ? payload.note : "";
-
-  if (!facility) {
-    throw new Error("施設名は必須です。");
-  }
-
-  if (!recordId && !recordDate) {
-    throw new Error("削除依頼IDまたは入力日付のいずれかを入力してください。");
-  }
-
-  let attachment = null;
-  if (payload.attachment && payload.attachment.content) {
-    attachment = {
-      content: String(payload.attachment.content),
-      filename: payload.attachment.filename ? String(payload.attachment.filename) : "attachment",
-      type: payload.attachment.type ? String(payload.attachment.type) : "application/octet-stream"
-    };
-
-    var approximateBytes = Math.ceil((attachment.content.length * 3) / 4);
-    if (approximateBytes > 900000) {
-      throw new Error("添付ファイルが大きすぎます。1MB未満のファイルをご利用ください。");
-    }
-  }
-
-  const docPayload = {
-    facility,
-    recordId,
-    recordDate,
-    note,
-    attachment,
-    status: "pending",
-    submittedAt: new Date().toISOString(),
-    lastError: failureReason || null
-  };
-
-  const docRef = await addDoc(collection(db, "delete_requests"), docPayload);
-  return { docId: docRef.id };
-};
-
-window.watchDeleteRequestStatus = function watchDeleteRequestStatus(
-  docId,
-  onUpdate,
-  onError
-) {
-  if (!docId) {
-    return function noop() {};
-  }
-
-  try {
-    const documentRef = doc(db, "delete_requests", docId);
-    return onSnapshot(
-      documentRef,
-      snapshot => {
-        if (typeof onUpdate === "function") {
-          onUpdate(snapshot.exists() ? snapshot.data() : null);
-        }
-      },
-      error => {
-        if (typeof onError === "function") {
-          onError(error);
-        }
-      }
-    );
-  } catch (listenerError) {
-    if (typeof onError === "function") {
-      onError(listenerError);
-    }
-    return function noop() {};
-  }
-};
-
-window.submitDeleteRequestViaFirestore = async function submitDeleteRequestViaFirestore(
-  payload,
-  options
-) {
-  if (!payload || typeof payload !== "object") {
-    throw new Error("削除依頼の内容が不正です。");
-  }
-
-  var failureReason = "";
-  if (options && typeof options.failureReason === "string") {
-    failureReason = options.failureReason.trim();
-  }
-
-  const trimValue = value => (typeof value === "string" ? value.trim() : "");
-  const facility = trimValue(payload.facility);
-  const recordId = trimValue(payload.recordId);
-  const recordDate = trimValue(payload.recordDate);
-  const note = typeof payload.note === "string" ? payload.note : "";
-
-  if (!facility) {
-    throw new Error("施設名は必須です。");
-  }
-
-  if (!recordId && !recordDate) {
-    throw new Error("削除依頼IDまたは入力日付のいずれかを入力してください。");
-  }
-
-  let attachment = null;
-  if (payload.attachment && payload.attachment.content) {
-    attachment = {
-      content: String(payload.attachment.content),
-      filename: payload.attachment.filename ? String(payload.attachment.filename) : "attachment",
-      type: payload.attachment.type ? String(payload.attachment.type) : "application/octet-stream"
-    };
-
-    var approximateBytes = Math.ceil((attachment.content.length * 3) / 4);
-    if (approximateBytes > 900000) {
-      throw new Error("添付ファイルが大きすぎます。1MB未満のファイルをご利用ください。");
-    }
-  }
-
-  const docPayload = {
-    facility,
-    recordId,
-    recordDate,
-    note,
-    attachment,
-    status: "pending",
-    submittedAt: new Date().toISOString(),
-    lastError: failureReason || null
-  };
-
-  const docRef = await addDoc(collection(db, "delete_requests"), docPayload);
-  return { docId: docRef.id };
-};
-
-window.watchDeleteRequestStatus = function watchDeleteRequestStatus(
-  docId,
-  onUpdate,
-  onError
-) {
-  if (!docId) {
-    return function noop() {};
-  }
-
-  try {
-    const documentRef = doc(db, "delete_requests", docId);
-    return onSnapshot(
-      documentRef,
-      snapshot => {
-        if (typeof onUpdate === "function") {
-          onUpdate(snapshot.exists() ? snapshot.data() : null);
-        }
-      },
-      error => {
-        if (typeof onError === "function") {
-          onError(error);
-        }
-      }
-    );
-  } catch (listenerError) {
-    if (typeof onError === "function") {
-      onError(listenerError);
-    }
-    return function noop() {};
-  }
-};
-
-window.submitDeleteRequestViaFirestore = async function submitDeleteRequestViaFirestore(
-  payload,
-  options
-) {
-  if (!payload || typeof payload !== "object") {
-    throw new Error("削除依頼の内容が不正です。");
-  }
-
-  var failureReason = "";
-  if (options && typeof options.failureReason === "string") {
-    failureReason = options.failureReason.trim();
-  }
-
-  const trimValue = value => (typeof value === "string" ? value.trim() : "");
-  const facility = trimValue(payload.facility);
-  const recordId = trimValue(payload.recordId);
-  const recordDate = trimValue(payload.recordDate);
-  const note = typeof payload.note === "string" ? payload.note : "";
-
-  if (!facility) {
-    throw new Error("施設名は必須です。");
-  }
-
-  if (!recordId && !recordDate) {
-    throw new Error("削除依頼IDまたは入力日付のいずれかを入力してください。");
-  }
-
-  let attachment = null;
-  if (payload.attachment && payload.attachment.content) {
-    attachment = {
-      content: String(payload.attachment.content),
-      filename: payload.attachment.filename ? String(payload.attachment.filename) : "attachment",
-      type: payload.attachment.type ? String(payload.attachment.type) : "application/octet-stream"
-    };
-
-    var approximateBytes = Math.ceil((attachment.content.length * 3) / 4);
-    if (approximateBytes > 900000) {
-      throw new Error("添付ファイルが大きすぎます。1MB未満のファイルをご利用ください。");
-    }
-  }
-
-  const docPayload = {
-    facility,
-    recordId,
-    recordDate,
-    note,
-    attachment,
-    status: "pending",
-    submittedAt: new Date().toISOString(),
-    lastError: failureReason || null
-  };
-
-  const docRef = await addDoc(collection(db, "delete_requests"), docPayload);
-  return { docId: docRef.id };
-};
-
-window.watchDeleteRequestStatus = function watchDeleteRequestStatus(
-  docId,
-  onUpdate,
-  onError
-) {
-  if (!docId) {
-    return function noop() {};
-  }
-
-  try {
-    const documentRef = doc(db, "delete_requests", docId);
-    return onSnapshot(
-      documentRef,
-      snapshot => {
-        if (typeof onUpdate === "function") {
-          onUpdate(snapshot.exists() ? snapshot.data() : null);
-        }
-      },
-      error => {
-        if (typeof onError === "function") {
-          onError(error);
-        }
-      }
-    );
-  } catch (listenerError) {
-    if (typeof onError === "function") {
-      onError(listenerError);
-    }
-    return function noop() {};
-  }
-};
 
 window.submitDeleteRequestViaFirestore = async function submitDeleteRequestViaFirestore(
   payload,

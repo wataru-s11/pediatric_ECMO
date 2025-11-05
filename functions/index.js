@@ -279,13 +279,6 @@ exports.sendDeleteRequest = functions
     }
   });
 
-exports.processDeleteRequest = functions
-  .region("asia-northeast1")
-  .firestore.document("delete_requests/{requestId}")
-  .onCreate(async snapshot => {
-    await processDeleteRequestSnapshot(snapshot, { force: false });
-  });
-
 exports.reprocessDeleteRequest = functions
   .region("asia-northeast1")
   .https.onRequest(async (req, res) => {
@@ -419,4 +412,81 @@ exports.reprocessDeleteRequestCallable = functions
         error && error.message ? error.message : "Unknown error"
       );
     }
+  });
+
+function hasValueChanged(afterValue, beforeValue) {
+  if (afterValue === undefined && beforeValue === undefined) {
+    return false;
+  }
+
+  if (afterValue === null && beforeValue === null) {
+    return false;
+  }
+
+  if (afterValue === undefined || afterValue === null) {
+    return beforeValue !== undefined && beforeValue !== null;
+  }
+
+  if (beforeValue === undefined || beforeValue === null) {
+    return afterValue !== undefined && afterValue !== null;
+  }
+
+  if (
+    afterValue instanceof admin.firestore.Timestamp &&
+    beforeValue instanceof admin.firestore.Timestamp
+  ) {
+    return afterValue.toMillis() !== beforeValue.toMillis();
+  }
+
+  if (typeof afterValue === "object" && typeof beforeValue === "object") {
+    try {
+      return JSON.stringify(afterValue) !== JSON.stringify(beforeValue);
+    } catch (jsonError) {
+      console.warn("Failed to compare values", jsonError);
+      return true;
+    }
+  }
+
+  return afterValue !== beforeValue;
+}
+
+exports.handleDeleteRequestWrite = functions
+  .region("asia-northeast1")
+  .firestore.document("delete_requests/{requestId}")
+  .onWrite(async (change, context) => {
+    const after = change.after;
+    if (!after.exists) {
+      return null;
+    }
+
+    const data = after.data() || {};
+    const status =
+      typeof data.status === "string" ? data.status.toLowerCase() : "";
+
+    if (!change.before.exists) {
+      return processDeleteRequestSnapshot(after, { force: false });
+    }
+
+    if (status === "sent") {
+      return null;
+    }
+
+    const beforeData = change.before.data() || {};
+    const previousStatus =
+      typeof beforeData.status === "string"
+        ? beforeData.status.toLowerCase()
+        : "";
+
+    const statusBecamePending = status === "pending" && previousStatus !== "pending";
+    const retryRequested =
+      status === "pending" &&
+      hasValueChanged(data.retryRequestedAt, beforeData.retryRequestedAt);
+
+    if (!statusBecamePending && !retryRequested) {
+      return null;
+    }
+
+    return processDeleteRequestSnapshot(after, {
+      force: statusBecamePending && previousStatus === "sent"
+    });
   });
