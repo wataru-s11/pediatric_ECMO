@@ -319,6 +319,7 @@ exports.reprocessDeleteRequest = functions
       res.status(400).json({ error: "Missing docId" });
       return;
     }
+  });
 
     try {
       const docRef = admin.firestore().collection("delete_requests").doc(docId);
