@@ -295,7 +295,6 @@ exports.reprocessDeleteRequest = functions
       res.status(204).send("");
       return;
     }
-  });
 
     if (req.method !== "POST") {
       res.set("Allow", "POST");
@@ -327,6 +326,7 @@ exports.reprocessDeleteRequest = functions
       res.status(400).json({ error: "Missing docId" });
       return;
     }
+  });
 
     try {
       const docRef = admin.firestore().collection("delete_requests").doc(docId);
@@ -344,5 +344,79 @@ exports.reprocessDeleteRequest = functions
     } catch (error) {
       console.error("Failed to reprocess delete request", error);
       res.status(500).json({ error: error.message || "Unknown error" });
+    }
+  });
+
+exports.sendDeleteRequestCallable = functions
+  .region("asia-northeast1")
+  .https.onCall(async data => {
+    if (!SENDGRID_KEY) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "SendGrid API key is not configured."
+      );
+    }
+
+    let sanitizedPayload;
+    try {
+      sanitizedPayload = sanitizeDeleteRequestPayload(data || {});
+    } catch (validationError) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        validationError.message
+      );
+    }
+
+    try {
+      await sendDeleteRequestEmail(sanitizedPayload);
+      return { success: true };
+    } catch (error) {
+      const messageText = extractSendgridError(error);
+      throw new functions.https.HttpsError("internal", messageText);
+    }
+  });
+
+exports.reprocessDeleteRequestCallable = functions
+  .region("asia-northeast1")
+  .https.onCall(async data => {
+    if (!SENDGRID_KEY) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "SendGrid API key is not configured."
+      );
+    }
+
+    const docId =
+      data && typeof data.docId === "string" ? data.docId.trim() : "";
+
+    if (!docId) {
+      throw new functions.https.HttpsError("invalid-argument", "Missing docId");
+    }
+
+    try {
+      const docRef = admin.firestore().collection("delete_requests").doc(docId);
+      const snapshot = await docRef.get();
+
+      if (!snapshot.exists) {
+        throw new functions.https.HttpsError(
+          "not-found",
+          "Delete request not found"
+        );
+      }
+
+      const result = await processDeleteRequestSnapshot(snapshot, {
+        force: data && data.force === true
+      });
+
+      return result;
+    } catch (error) {
+      if (error instanceof functions.https.HttpsError) {
+        throw error;
+      }
+
+      throw new functions.https.HttpsError(
+        "internal",
+        error && error.message ? error.message : "Unknown error"
+      );
     }
   });
